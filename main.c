@@ -13,7 +13,6 @@
     i - immediate
 	I - activate immediate
 	m - RAM instruction mode
-    X - unused
 */
 
 #define RAM_IST   (uint64_t)0b100000000000000000000000000000000000000
