@@ -2,6 +2,7 @@
 #include <time.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 /* 
     IST: mooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
@@ -29,7 +30,7 @@
 #define MEM_SIZE 256
 #define REG_SIZE 16
 
-const long CYCLE = 1000;
+const long CYCLE = 250;
 const uint8_t LOG_LEVEL = 0;
 
 /*
@@ -121,7 +122,7 @@ void system_log(const int level, const char* locale, const char* message, const 
 		printf("[%s]|%s| %s ", type, locale, message);
 		va_start(valist, num);
 		for (int i = 0; i < num; i++) {
-			printf("%d ", va_arg(valist, uint32_t));
+			printf("%lu ", va_arg(valist, uint32_t));
 		}
 		va_end(valist);
 		printf("\n");
@@ -137,7 +138,7 @@ int ist_fetch(const byte address, const uint64_t ram) {
 		return 1;
 	}
 	ist.chunk = ROM[address];
-	system_log(0, "ROM", "IST fetch", 2, address, ROM[address]);
+	system_log(0, "ROM", "IST fetch", 1, address);
 	pc = address;
 	return 0;
 }
@@ -150,20 +151,19 @@ int ram_ist_fetch(const byte address) {
 	for (byte i = 0; i < IST_SIZE; i++) {
 		ist.bytes[i] = RAM[address + i];
 	}
-	system_log(0, "RAM", "IST fetch", 2, address, ist.chunk);
+	system_log(0, "RAM", "IST fetch", 1, address);
 	pc = address / IST_SIZE;
 	return 0;
 }
 
 int ist_execute() {
 	output = path_a = path_b = 0;
-	system_log(0, "PC", "Line", 1, pc);
 	byte buffer, branch = 0, ram_write = 0, mem_branch = 0;
 	if ((OPCODE & ist.chunk) >> 33 == 15) {
 		system_log(4, "CPU", "SCAN", 0);
 		uint32_t temp;
-		scanf_s("%d", &temp);
-		if (temp > UINT32_MAX) {
+		scanf_s("%lu", &temp);
+		if (temp > UINT64_MAX) {
 			system_log(1, "CPU", "Buffer Overflow", 0);
 		}
 		else {
