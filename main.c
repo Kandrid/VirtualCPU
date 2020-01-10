@@ -30,8 +30,8 @@
 #define MEM_SIZE 256
 #define REG_SIZE 16
 
-const long CYCLE = 250;
-const uint8_t LOG_LEVEL = 0;
+const long CYCLE = 0;
+const uint8_t LOG_LEVEL = 1;
 
 /*
 	Opcodes:
@@ -163,7 +163,7 @@ int ist_execute() {
 		system_log(4, "CPU", "SCAN", 0);
 		uint32_t temp;
 		scanf_s("%lu", &temp);
-		if (temp > UINT64_MAX) {
+		if (temp > UINT32_MAX) {
 			system_log(1, "CPU", "Buffer Overflow", 0);
 		}
 		else {
