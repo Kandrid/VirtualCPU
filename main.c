@@ -4,55 +4,74 @@
 #include <stdint.h>
 
 /* 
-    IST: mooooojjjjjjjjwwwwwwwwrrrrrrrrIRRRRiiii
+    IST: mooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
     o - opcode
     j - jmp
     w - write
     r - read A
-    R - read B / Immediate
-    i - immediate
+    i - read B / Immediate
 	I - activate immediate
 	m - RAM instruction mode
 */
+                            //JmooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
+#define GOTO      (uint64_t)0b1000000000000000000000000000000000000000
+#define RAM_IST   (uint64_t)0b0100000000000000000000000000000000000000
+#define OPCODE    (uint64_t)0b0011111000000000000000000000000000000000
+#define JMP	      (uint64_t)0b0000000111111110000000000000000000000000
+#define WRITE     (uint64_t)0b0000000000000001111111100000000000000000
+#define READ_A    (uint64_t)0b0000000000000000000000011111111000000000
+#define IMD_ON    (uint64_t)0b0000000000000000000000000000000100000000
+#define READ_B    (uint64_t)0b0000000000000000000000000000000011111111
+#define IMMEDIATE (uint64_t)0b0000000000000000000000000000000011111111
 
-#define RAM_IST   (uint64_t)0b100000000000000000000000000000000000000
-#define OPCODE    (uint64_t)0b011111000000000000000000000000000000000
-#define JMP	      (uint64_t)0b000000111111110000000000000000000000000
-#define WRITE     (uint64_t)0b000000000000001111111100000000000000000
-#define READ_A    (uint64_t)0b000000000000000000000011111111000000000
-#define IMD_ON    (uint64_t)0b000000000000000000000000000000100000000
-#define READ_B    (uint64_t)0b000000000000000000000000000000011111111
-#define IMMEDIATE (uint64_t)0b000000000000000000000000000000011111111
-
-#define IST_SIZE 6
+#define IST_SIZE sizeof(uint64_t)
 #define MEM_SIZE 256
 #define REG_SIZE 16
 
-const long CYCLE = 1000;
+const long CYCLE = 0;
+const uint8_t LOG_LEVEL = 0;
+
+/*
+	Opcodes:
+	00000 - ADD
+	00001 - SUB
+	00010 - MULT
+	00011 - DIV
+	00100 - OR
+	00101 - AND
+	00110 - XOR
+	00111 - SHIFT_R
+	01000 - SHIFT_L
+	01001 - JE
+	01010 - JLE
+	01011 - JGE
+	01100 - JL
+	01101 - JG
+	01110 - JNE
+	01111 - SCAN
+	10000 - RAM Write
+	10001 - RAM Read [B]
+*/
 
 const uint64_t ROM[MEM_SIZE] = { 
-	0b000000000000000000000100000000100000011,
-	0b000000000000000000001000000000100000100,
-	0b000000000000000000001100000000100000100,
-	0b001001000011110000000000000000000000000,
-	0b010001000000000000000000000000000000001,
-	0b001111000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
-	0b010000000000000000000100000010000000001,
-	0b001110111111110000000000000000000000011,
-	0b000000000000000000000000000000000000000,
-	0b000000000000000000000000000000000000000,
+	//JmooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
+	0b0001111000000000000000100000000000000000,
+	0b0001111000000000000001000000000000000000,
+	0b0000000000000000000001100000000100000001,
+	0b0000000000000000000010000000000000000000,
+	0b0001010000001000000000000000001000000010,
+	0b0000000000000000000010100000000000000001,
+	0b0000000000000000000000100000000000000010,
+	0b0000000000000000000001000000000000000101,
+	0b0000101000000000000010100000010000000011,
+	0b0001001000000100000000000000000000000101,
+	0b0000000000000000000010000000001000000100,
+	0b0001000000000000000000100000000000000001,
+	0b0001000000000000000001100000000000000011,
+	0b0001010111110110000000000000011000000010,
+	0b0010010000000000000000000000000000000100,
+	0b1001001000000000000000000000000000000000
+	//JmooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
 };
 
 typedef unsigned __int8 byte;
@@ -73,55 +92,64 @@ clock_t clock_time = 0;
 
 int state = 0;
 int ram_mode = 0;
-unsigned int pc = 0;
 
-void system_log(int level, char* locale, char* message, int num,...) {
-	va_list valist;
-	char* type;
-	if (level == -1) {
-		type = "ENTRY";
-	} else if (level == 0) {
-		type = "INFO";
-	} else if (level == 1) {
-		type = "WARN";
+uint32_t pc = 0;
+
+void system_log(const int level, const char* locale, const char* message, const int num,...) {
+	if (level >= LOG_LEVEL) {
+		va_list valist;
+		char* type;
+		if (level == 0) {
+			type = "INFO";
+		}
+		else if (level == 1) {
+			type = "WARN";
+		}
+		else if (level == 2) {
+			type = "ERROR";
+		} else if (level == 3) {
+			type = "OUTPUT";
+		}
+		else if (level == 4) {
+			type = "INPUT";
+		}
+		else {
+			printf("[N/A]");
+			return;
+		}
+		printf("[%s]|%s| %s ", type, locale, message);
+		va_start(valist, num);
+		for (int i = 0; i < num; i++) {
+			printf("%d ", va_arg(valist, uint32_t));
+		}
+		va_end(valist);
+		printf("\n");
 	}
-	else if (level == 2) {
-		type = "ERROR";
-	}
-	else {
-		printf("[N/A]");
-		return;
-	}
-	printf("[%s]|%s| %s ", type, locale, message);
-	va_start(valist, num);
-	for (int i = 0; i < num; i++) {
-		printf("%d ", va_arg(valist, int));
-	}
-	va_end(valist);
-	printf("\n");
 }
 
-int ist_fetch(byte address, int ram) {
+int ist_fetch(const byte address, const uint64_t ram) {
 	if (ram) {
 		return ram_ist_fetch(address);
 	}
 	if (address >= MEM_SIZE) {
+		system_log(1, "ROM", "Address out of reach", 1, address);
 		return 1;
 	}
 	ist.chunk = ROM[address];
-	system_log(0, "ROM", "IST fetch", 1, address);
+	system_log(0, "ROM", "IST fetch", 2, address, ROM[address]);
 	pc = address;
 	return 0;
 }
 
-int ram_ist_fetch(byte address) {
+int ram_ist_fetch(const byte address) {
 	if (address > MEM_SIZE - 9) {
+		system_log(1, "RAM", "Address out of reach", 1, address);
 		return 1;
 	}
 	for (byte i = 0; i < IST_SIZE; i++) {
-		ist.bytes[IST_SIZE - i - 1] = RAM[address + i];
+		ist.bytes[i] = RAM[address + i];
 	}
-	system_log(0, "RAM", "IST fetch", 1, address);
+	system_log(0, "RAM", "IST fetch", 2, address, ist.chunk);
 	pc = address / IST_SIZE;
 	return 0;
 }
@@ -130,14 +158,16 @@ int ist_execute() {
 	output = path_a = path_b = 0;
 	system_log(0, "PC", "Line", 1, pc);
 	byte buffer, branch = 0, ram_write = 0, mem_branch = 0;
-	if ((JMP & ist.chunk) >> 25 == 255) {
-		mem_branch = 1;
-	}
 	if ((OPCODE & ist.chunk) >> 33 == 15) {
-		system_log(-1, "SYSTEM", "Opcode SCAN", 0);
-		int temp;
+		system_log(4, "SYSTEM", "SCAN", 0);
+		uint32_t temp;
 		scanf_s("%d", &temp);
-		path_b = (byte)temp;
+		if (temp > 255) {
+			system_log(1, "SYSTEM", "Buffer Overflow", 0);
+		}
+		else {
+			path_b = (byte)temp;
+		}
 	} else if ((OPCODE & ist.chunk) >> 33 == 17) {
 		if (READ_B & ist.chunk) {
 			buffer = (READ_B & ist.chunk);
@@ -156,7 +186,7 @@ int ist_execute() {
 				system_log(0, "SYSTEM", "Read B REG", 2, buffer, path_b);
 			}
 			else {
-				system_log(1, "SYSTEM", "Register index out of bound", 1, buffer);
+				system_log(1, "SYSTEM", "Register out of reach", 1, buffer);
 			}
 		}
 	}
@@ -172,14 +202,14 @@ int ist_execute() {
 	switch ((OPCODE & ist.chunk) >> 33) {
 	case 1:
 		output = path_a - path_b;
-		system_log(0, "SYSTEM", "Opcode SUB", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "SUB", 2, path_a, path_b);
 		break;
 	case 2:
 		output = path_a * path_b;
-		system_log(0, "SYSTEM", "Opcode MULT", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "MULT", 2, path_a, path_b);
 		break;
 	case 3:
-		system_log(0, "SYSTEM", "Opcode DIV", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "DIV", 2, path_a, path_b);
 		if (path_b == 0) {
 			system_log(2, "SYSTEM", "Division by Zero", 2, path_a, path_b);
 			output = 256;
@@ -190,59 +220,59 @@ int ist_execute() {
 		break;
 	case 4:
 		output = path_a | path_b;
-		system_log(0, "SYSTEM", "Opcode OR", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "OR", 2, path_a, path_b);
 		break;
 	case 5:
 		output = path_a & path_b;
-		system_log(0, "SYSTEM", "Opcode AND", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "AND", 2, path_a, path_b);
 		break;
 	case 6:
 		output = path_a ^ path_b;
-		system_log(0, "SYSTEM", "Opcode XOR", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "XOR", 2, path_a, path_b);
 		break;
 	case 7:
 		output = (path_a + path_b) >> 1;
-		system_log(0, "SYSTEM", "Opcode SHIFT_R", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "SHIFT_R", 2, path_a, path_b);
 		break;
 	case 8:
 		output = (path_a + path_b) << 1;
-		system_log(0, "SYSTEM", "Opcode SHIFT_L", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "SHIFT_L", 2, path_a, path_b);
 		break;
 	case 9:
 		if (path_a == path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "Opcode JE", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "JE", 2, path_a, path_b);
 		break;
 	case 10:
 		if (path_a <= path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "Opcode JLE", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "JLE", 2, path_a, path_b);
 		break;
 	case 11:
 		if (path_a >= path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "Opcode JGE", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "JGE", 2, path_a, path_b);
 		break;
 	case 12:
 		if (path_a < path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "Opcode JL", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "JL", 2, path_a, path_b);
 		break;
 	case 13:
 		if (path_a > path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "Opcode JG", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "JG", 2, path_a, path_b);
 		break;
 	case 14:
 		if (path_a != path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "Opcode JNE", 2, path_a, path_b);
+		system_log(0, "SYSTEM", "JNE", 2, path_a, path_b);
 		break;
 	case 16:
 		ram_write = 1;
@@ -251,6 +281,8 @@ int ist_execute() {
 			RAM[buffer - 1] = output;
 			system_log(0, "RAM", "Write Address", 2, buffer, output);
 		}
+	case 18:
+		system_log(3, "SYSTEM", "", 1, output);
 		break;
 	}
 	if (!ram_write && WRITE & ist.chunk) {
@@ -258,9 +290,17 @@ int ist_execute() {
 		REG[buffer - 1] = output;
 		system_log(0, "REG", "Write REG", 2, buffer, output);
 	}
-	int ram_ist = RAM_IST & ist.chunk;
+	uint64_t ram_ist = (RAM_IST & ist.chunk) >> 38;
+	if (ram_ist) {
+		system_log(0, "SYSTEM", "RAM Fetch Call", 0);
+	}
+	if (GOTO & ist.chunk) {
+		system_log(4, "SYSTEM", "GOTO", 1, output);
+		mem_branch = 1;
+		branch = 1;
+	}
 	if (branch || ram_mode != ram_ist) {
-		if (mem_branch && branch) {
+		if (ram_ist || mem_branch) {
 			branch = 0;
 			pc = output;
 		}
@@ -290,7 +330,7 @@ int main() {
 	while (!state) {
 		if (clock() - clock_time >= CYCLE) {
 			clock_time = clock();
-			ist_execute();
+			state = ist_execute();
 		}
 	}
 	return 0;
