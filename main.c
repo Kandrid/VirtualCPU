@@ -78,9 +78,9 @@ const uint64_t ROM[MEM_SIZE] = {
 typedef unsigned __int8 byte;
 
 byte RAM[MEM_SIZE];
-byte REG[REG_SIZE];
+uint32_t REG[REG_SIZE];
 
-byte path_a, path_b, output;
+uint32_t path_a, path_b, output;
 
 union IST {
 	byte bytes[IST_SIZE];
@@ -160,14 +160,14 @@ int ist_execute() {
 	system_log(0, "PC", "Line", 1, pc);
 	byte buffer, branch = 0, ram_write = 0, mem_branch = 0;
 	if ((OPCODE & ist.chunk) >> 33 == 15) {
-		system_log(4, "SYSTEM", "SCAN", 0);
+		system_log(4, "CPU", "SCAN", 0);
 		uint32_t temp;
 		scanf_s("%d", &temp);
-		if (temp > 255) {
-			system_log(1, "SYSTEM", "Buffer Overflow", 0);
+		if (temp > UINT32_MAX) {
+			system_log(1, "CPU", "Buffer Overflow", 0);
 		}
 		else {
-			path_b = (byte)temp;
+			path_b = temp;
 		}
 	} else if ((OPCODE & ist.chunk) >> 33 == 17) {
 		if (READ_B & ist.chunk) {
@@ -178,23 +178,23 @@ int ist_execute() {
 	} else {
 		if (IMD_ON & ist.chunk) {
 			path_b = IMMEDIATE & ist.chunk;
-			system_log(0, "SYSTEM", "Immediate", 1, path_b);
+			system_log(0, "CPU", "Immediate", 1, path_b);
 		}
 		else if (READ_B & ist.chunk) {
 			buffer = (READ_B & ist.chunk);
 			if (buffer <= REG_SIZE) {
 				path_b = REG[buffer - 1];
-				system_log(0, "SYSTEM", "Read B REG", 2, buffer, path_b);
+				system_log(0, "CPU", "Read B REG", 2, buffer, path_b);
 			}
 			else {
-				system_log(1, "SYSTEM", "Register out of reach", 1, buffer);
+				system_log(1, "CPU", "Register out of reach", 1, buffer);
 			}
 		}
 	}
 	if (READ_A & ist.chunk) {
 		buffer = (READ_A & ist.chunk) >> 9;
 		path_a = REG[buffer - 1];
-		system_log(0, "SYSTEM", "Read A REG", 2, buffer, path_a);
+		system_log(0, "CPU", "Read A REG", 2, buffer, path_a);
 	}
 	if (pc >= MEM_SIZE - 1) {
 		pc = -1;
@@ -203,16 +203,16 @@ int ist_execute() {
 	switch ((OPCODE & ist.chunk) >> 33) {
 	case 1:
 		output = path_a - path_b;
-		system_log(0, "SYSTEM", "SUB", 2, path_a, path_b);
+		system_log(0, "ALU", "SUB", 2, path_a, path_b);
 		break;
 	case 2:
 		output = path_a * path_b;
-		system_log(0, "SYSTEM", "MULT", 2, path_a, path_b);
+		system_log(0, "ALU", "MULT", 2, path_a, path_b);
 		break;
 	case 3:
-		system_log(0, "SYSTEM", "DIV", 2, path_a, path_b);
+		system_log(0, "ALU", "DIV", 2, path_a, path_b);
 		if (path_b == 0) {
-			system_log(2, "SYSTEM", "Division by Zero", 2, path_a, path_b);
+			system_log(2, "ALU", "Division by Zero", 2, path_a, path_b);
 			output = 256;
 		}
 		else {
@@ -221,59 +221,59 @@ int ist_execute() {
 		break;
 	case 4:
 		output = path_a | path_b;
-		system_log(0, "SYSTEM", "OR", 2, path_a, path_b);
+		system_log(0, "ALU", "OR", 2, path_a, path_b);
 		break;
 	case 5:
 		output = path_a & path_b;
-		system_log(0, "SYSTEM", "AND", 2, path_a, path_b);
+		system_log(0, "ALU", "AND", 2, path_a, path_b);
 		break;
 	case 6:
 		output = path_a ^ path_b;
-		system_log(0, "SYSTEM", "XOR", 2, path_a, path_b);
+		system_log(0, "ALU", "XOR", 2, path_a, path_b);
 		break;
 	case 7:
 		output = (path_a + path_b) >> 1;
-		system_log(0, "SYSTEM", "SHIFT_R", 2, path_a, path_b);
+		system_log(0, "ALU", "SHIFT_R", 2, path_a, path_b);
 		break;
 	case 8:
 		output = (path_a + path_b) << 1;
-		system_log(0, "SYSTEM", "SHIFT_L", 2, path_a, path_b);
+		system_log(0, "ALU", "SHIFT_L", 2, path_a, path_b);
 		break;
 	case 9:
 		if (path_a == path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "JE", 2, path_a, path_b);
+		system_log(0, "ALU", "JE", 2, path_a, path_b);
 		break;
 	case 10:
 		if (path_a <= path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "JLE", 2, path_a, path_b);
+		system_log(0, "ALU", "JLE", 2, path_a, path_b);
 		break;
 	case 11:
 		if (path_a >= path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "JGE", 2, path_a, path_b);
+		system_log(0, "ALU", "JGE", 2, path_a, path_b);
 		break;
 	case 12:
 		if (path_a < path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "JL", 2, path_a, path_b);
+		system_log(0, "ALU", "JL", 2, path_a, path_b);
 		break;
 	case 13:
 		if (path_a > path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "JG", 2, path_a, path_b);
+		system_log(0, "ALU", "JG", 2, path_a, path_b);
 		break;
 	case 14:
 		if (path_a != path_b) {
 			branch = (JMP & ist.chunk) >> 25;
 		}
-		system_log(0, "SYSTEM", "JNE", 2, path_a, path_b);
+		system_log(0, "ALU", "JNE", 2, path_a, path_b);
 		break;
 	case 16:
 		ram_write = 1;
@@ -283,7 +283,7 @@ int ist_execute() {
 			system_log(0, "RAM", "Write Address", 2, buffer, output);
 		}
 	case 18:
-		system_log(3, "SYSTEM", "", 1, output);
+		system_log(3, "CPU", "", 1, output);
 		break;
 	}
 	if (!ram_write && WRITE & ist.chunk) {
@@ -293,10 +293,10 @@ int ist_execute() {
 	}
 	uint64_t ram_ist = (RAM_IST & ist.chunk) >> 38;
 	if (ram_ist) {
-		system_log(0, "SYSTEM", "RAM Fetch Call", 0);
+		system_log(0, "CPU", "RAM Fetch Call", 0);
 	}
 	if (GOTO & ist.chunk) {
-		system_log(0, "SYSTEM", "GOTO", 1, output);
+		system_log(0, "CPU", "GOTO", 1, output);
 		mem_branch = 1;
 		branch = 1;
 	}
@@ -322,7 +322,7 @@ int ist_execute() {
 }
 
 int start() {
-	system_log(0, "SYSTEM", "Starting", 0);
+	system_log(0, "CPU", "Starting", 0);
 	return ist_fetch(0, 0);
 }
 
