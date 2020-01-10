@@ -7,6 +7,7 @@
     IST: mooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
     o - opcode
     j - jmp
+	J - goto
     w - write
     r - read A
     i - read B / Immediate
@@ -28,7 +29,7 @@
 #define MEM_SIZE 256
 #define REG_SIZE 16
 
-const long CYCLE = 0;
+const long CYCLE = 1000;
 const uint8_t LOG_LEVEL = 0;
 
 /*
@@ -295,7 +296,7 @@ int ist_execute() {
 		system_log(0, "SYSTEM", "RAM Fetch Call", 0);
 	}
 	if (GOTO & ist.chunk) {
-		system_log(4, "SYSTEM", "GOTO", 1, output);
+		system_log(0, "SYSTEM", "GOTO", 1, output);
 		mem_branch = 1;
 		branch = 1;
 	}
