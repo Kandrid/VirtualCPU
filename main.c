@@ -77,7 +77,7 @@ const word ROM[ROM_SIZE] = { // Program instructions to be inserted at the start
 	0b1001100000010000,// JMP 0
 };
 
-const long CYCLE = 0;     // Time in milliseconds between instruction execution or each clock cycle
+const long CYCLE = 500;     // Time in milliseconds between instruction execution or each clock cycle
 const byte LOG_LEVEL = 0;   // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
 
 word RAM[MEM_SIZE] = { 0 }; // Memory
