@@ -77,7 +77,7 @@ const word ROM[ROM_SIZE] = { // Program instructions to be inserted at the start
 	0b1001100000010000,// JMP 0
 };
 
-const long CYCLE = 500;     // Time in milliseconds between instruction execution or each clock cycle
+const long CYCLE = 0;     // Time in milliseconds between instruction execution or each clock cycle
 const byte LOG_LEVEL = 0;   // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
 
 word RAM[MEM_SIZE] = { 0 }; // Memory
@@ -342,12 +342,18 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case IN: {   // Scan for input and store the value in a register
 			system_log(4, "CPU", "IN", 0);
-			int buffer;
-			scanf_s("%d", &buffer);
+			char* end;
+			char buf[10];
+			if (!fgets(buf, sizeof buf, stdin))
+					break;
+			buf[strlen(buf) - 1] = 0;
+			int buffer = strtol(buf, &end, 10);
 			if (buffer > UINT16_MAX) {
 				system_log(1, "CPU", "Buffer Overflow", 0);
 			}
-			REG[(inst >> 8) & 0b111] = (word)buffer;
+			else {
+				REG[(inst >> 8) & 0b111] = (word)buffer;
+			}
 		}
 			break;
 		case OUT: {	 // Output the value in a register
