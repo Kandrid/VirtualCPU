@@ -56,8 +56,8 @@ enum OPCODE {// Instruction Format                   Opcode function
 
 const word ROM[ROM_SIZE] = { // Program instructions to be inserted at the start of memory
 	// Current Program: Takes in two values and outputs their product and repeats
-	0b1100000100000000,// IN 1
-	0b1100001000000000,// IN 2
+	0b1100000100000000,// IN R1
+	0b1100001000000000,// IN R2
 	0b0110101100010001,// LDR R3 1
 	0b1011110000000000,// CLR R4
 	0b0001000001000001,// SUB R0 R2 R1
