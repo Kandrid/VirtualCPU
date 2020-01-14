@@ -320,7 +320,7 @@ int ist_execute() { // Executes the current instruction
 			system_log(0, "CPU", "JMP", 1, address);
 		}
 			break;
-		case JSR: {	 // Jump to subroutine address
+		case JSR: {  // Jump to subroutine address
 			word address = REG[RPC] + sign_extend(inst & 0x3ff, 10);
 			REG[R7] = REG[RPC];
 			REG[RPC] = address;
@@ -334,13 +334,13 @@ int ist_execute() { // Executes the current instruction
 			system_log(0, "CPU", "JSRR", 1, address);
 		}
 			break;
-		case CLR: {	 // Clear a register
+		case CLR: {  // Clear a register
 			word reg = (inst >> 8) & 0b111;
 			REG[reg] = 0;
 			system_log(0, "REG", "CLR", 1, reg);
 		}
 			break;
-		case IN: {	 // Scan for input and store the value in a register
+		case IN: {   // Scan for input and store the value in a register
 			system_log(4, "CPU", "IN", 0);
 			int buffer;
 			scanf_s("%d", &buffer);
@@ -356,7 +356,7 @@ int ist_execute() { // Executes the current instruction
 			printf("%d\n", REG[reg]);
 		}
 			break;
-		default:	 // Invalid opcode case
+		default:     // Invalid opcode case
 			system_log(2, "CPU", "Invalid Opcode", 1, opcode);
 			return 1;
 			break;
@@ -364,17 +364,17 @@ int ist_execute() { // Executes the current instruction
 	return ist_fetch(REG[RPC]); // Fetch the next instruction
 }
 
-int start() {											// Start the system
+int start() {                                           // Start the system
 	system_log(0, "CPU", "Starting", 0);
 	for (int i = 0; i < ROM_SIZE && i < MEM_SIZE; i++) {// Load the program memory into memory
 		RAM[i] = ROM[i];
 	}
-	return ist_fetch(0);								// Fetch the first instruction
+	return ist_fetch(0);                                // Fetch the first instruction
 }
 
 int main() {
 	if (!start()) {
-		while (!state) {								// Clock cycle
+		while (!state) {                                // Clock cycle
 			if (clock() - clock_time >= CYCLE) {
 				clock_time = clock();
 				state = ist_execute();
