@@ -6,11 +6,11 @@
 #include <time.h>
 
 typedef unsigned __int8 byte;
-typedef uint16_t word;			  // Common data size of system
+typedef uint16_t word;            // Common data size of system
 
 #define IST_SIZE sizeof(uint16_t) // Instruction size
-#define MEM_SIZE UINT16_MAX		  // Memory size
-#define ROM_SIZE 128			  // Program memory size
+#define MEM_SIZE UINT16_MAX       // Memory size
+#define ROM_SIZE 128              // Program memory size
 
 enum REG { // Register indexes
 	R0 = 0,
@@ -26,32 +26,32 @@ enum REG { // Register indexes
 	RCOUNT
 };
 
-enum OPCODE {//|Instruction Format                  |Opcode function				|
+enum OPCODE {// Instruction Format                   Opcode function
 	ADD = 1, // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 + R3 or R1 <- R2 + I
-	SUB,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 - R3 or R1 <- R2 - I
-	MUL,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 * R3 or R1 <- R2 * I
-	DIV,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 / R3 or R1 <- R2 / I
-	INC,	 // oooooddd00000000 || oooooddd0001iiii R1 <- R1 + 1 or R1 <- R1 + I
-	DEC,	 // oooooddd00000000 || oooooddd0001iiii R1 <- R2 - 1 or R1 <- R2 - I
-	SHR,	 // ooooodddsss00000					 R1 <- R2 >> 1
-	SHL,	 // ooooodddsss00000					 R1 <- R2 << 1
-	NOT,	 // ooooodddsss00000					 R1 <- ~R2
-	OR,		 // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 | R3 or R1 <- R2 | I
-	AND,	 // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 & R3 or R1 <- R2 & I
-	XOR,	 // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 ^ R3 or R1 <- R2 ^ I
-	LDR,	 // ooooodddsss00000 || oooooddd0001iiii R1 <- R2 or R1 <- I
-	LD, 	 // ooooodddaaaaaaaa					 R1 <- MEM(PC + A)
-	LDI,	 // ooooodddpppppppp					 R1 <- MEM(MEM(PC + A))
-	ST, 	 // ooooosssaaaaaaaa					 MEM(A) <- R1
-	STI,	 // ooooossspppppppp					 MEM(MEM(A)) <- R1
-	BR,		 // ooooonzpaaaaaaaa					 Branch if flag set: PC <- PC + A
-	JMP,	 // ooooo000sss00000 || ooooo0000001iiii PC <- R1 or PC <- I
-	JSR,	 // ooooo1aaaaaaaaaa					 R[7] <- PC, PC <- A
-	JSRR,	 // ooooo000sss00000					 R[7] <- PC, PC <- R1
-	RET,	 // ooooo00011100000					 PC <- R[7]
-	CLR,	 // oooooddd00000000					 R1 <- 0
-	IN,		 // oooooddd00000000					 R1 <- IN
-	OUT,	 // ooooo000sss00000					 OUT <- R1
+	SUB,     // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 - R3 or R1 <- R2 - I
+	MUL,     // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 * R3 or R1 <- R2 * I
+	DIV,     // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 / R3 or R1 <- R2 / I
+	INC,     // oooooddd00000000 || oooooddd0001iiii R1 <- R1 + 1 or R1 <- R1 + I
+	DEC,     // oooooddd00000000 || oooooddd0001iiii R1 <- R2 - 1 or R1 <- R2 - I
+	SHR,     // ooooodddsss00000                     R1 <- R2 >> 1
+	SHL,     // ooooodddsss00000                     R1 <- R2 << 1
+	NOT,     // ooooodddsss00000                     R1 <- ~R2
+	OR,      // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 | R3 or R1 <- R2 | I
+	AND,     // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 & R3 or R1 <- R2 & I
+	XOR,     // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 ^ R3 or R1 <- R2 ^ I
+	LDR,     // ooooodddsss00000 || oooooddd0001iiii R1 <- R2 or R1 <- I
+	LD,      // ooooodddaaaaaaaa                     R1 <- MEM(PC + A)
+	LDI,     // ooooodddpppppppp                     R1 <- MEM(MEM(PC + A))
+	ST,      // ooooosssaaaaaaaa                     MEM(A) <- R1
+	STI,     // ooooossspppppppp                     MEM(MEM(A)) <- R1
+	BR,      // ooooonzpaaaaaaaa                     Branch if flag set: PC <- PC + A
+	JMP,     // ooooo000sss00000 || ooooo0000001iiii PC <- R1 or PC <- I
+	JSR,     // ooooo1aaaaaaaaaa                     R[7] <- PC, PC <- A
+	JSRR,    // ooooo000sss00000                     R[7] <- PC, PC <- R1
+	RET,     // ooooo00011100000                     PC <- R[7]
+	CLR,     // oooooddd00000000                     R1 <- 0
+	IN,      // oooooddd00000000                     R1 <- IN
+	OUT,     // ooooo000sss00000                     OUT <- R1
 };
 
 const word ROM[ROM_SIZE] = { // Program instructions to be inserted at the start of memory
@@ -77,17 +77,17 @@ const word ROM[ROM_SIZE] = { // Program instructions to be inserted at the start
 	0b1001100000010000,// JMP 0
 };
 
-const long CYCLE = 500;	    // Time in milliseconds between instruction execution or each clock cycle
+const long CYCLE = 500;     // Time in milliseconds between instruction execution or each clock cycle
 const byte LOG_LEVEL = 0;   // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
 
 word RAM[MEM_SIZE] = { 0 }; // Memory
-word REG[RCOUNT];			// Registers
+word REG[RCOUNT];           // Registers
 
-word inst;					// Current instruction
+word inst;                  // Current instruction
 
-clock_t clock_time = 0;		// Clock cycle accumulator
+clock_t clock_time = 0;     // Clock cycle accumulator
 
-int state = 0;				// System state
+int state = 0;              // System state
 
 void system_log(const int level, const char* locale, const char* message, const int num,...) { // System logging
 	if (level >= LOG_LEVEL) {
