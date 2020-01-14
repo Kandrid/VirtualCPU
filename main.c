@@ -353,7 +353,7 @@ int ist_execute() { // Executes the current instruction
 		case OUT: {	 // Output the value in a register
 			system_log(3, "CPU", "OUT", 0);
 			word reg = (inst >> 5) & 0b111;
-			printf("%d\n", REG[reg]);
+			printf("%d\n", (__int16)REG[reg]);
 		}
 			break;
 		default:     // Invalid opcode case
