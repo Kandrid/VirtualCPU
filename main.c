@@ -1,102 +1,95 @@
-#include <stdio.h>
-#include <time.h>
 #include <stdarg.h>
 #include <stdint.h>
-
-/* 
-    IST: mooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
-    o - opcode
-    j - jmp
-	J - goto
-    w - write
-    r - read A
-    i - read B / Immediate
-	I - activate immediate
-	m - RAM instruction mode
-*/
-                            //JmooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
-#define GOTO      (uint64_t)0b1000000000000000000000000000000000000000
-#define RAM_IST   (uint64_t)0b0100000000000000000000000000000000000000
-#define OPCODE    (uint64_t)0b0011111000000000000000000000000000000000
-#define JMP	      (uint64_t)0b0000000111111110000000000000000000000000
-#define WRITE     (uint64_t)0b0000000000000001111111100000000000000000
-#define READ_A    (uint64_t)0b0000000000000000000000011111111000000000
-#define IMD_ON    (uint64_t)0b0000000000000000000000000000000100000000
-#define READ_B    (uint64_t)0b0000000000000000000000000000000011111111
-#define IMMEDIATE (uint64_t)0b0000000000000000000000000000000011111111
-
-#define IST_SIZE sizeof(uint64_t)
-#define MEM_SIZE 256
-#define REG_SIZE 16
-
-const long CYCLE = 0;
-const uint8_t LOG_LEVEL = 1;
-
-/*
-	Opcodes:
-	00000 - ADD
-	00001 - SUB
-	00010 - MULT
-	00011 - DIV
-	00100 - OR
-	00101 - AND
-	00110 - XOR
-	00111 - SHIFT_R
-	01000 - SHIFT_L
-	01001 - JE
-	01010 - JLE
-	01011 - JGE
-	01100 - JL
-	01101 - JG
-	01110 - JNE
-	01111 - SCAN
-	10000 - RAM Write
-	10001 - RAM Read [B]
-*/
-
-const uint64_t ROM[MEM_SIZE] = { 
-	//JmooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
-	0b0001111000000000000000100000000000000000,
-	0b0001111000000000000001000000000000000000,
-	0b0000000000000000000001100000000100000001,
-	0b0000000000000000000010000000000000000000,
-	0b0001010000001000000000000000001000000010,
-	0b0000000000000000000010100000000000000001,
-	0b0000000000000000000000100000000000000010,
-	0b0000000000000000000001000000000000000101,
-	0b0000101000000000000010100000010000000011,
-	0b0001001000000100000000000000000000000101,
-	0b0000000000000000000010000000001000000100,
-	0b0001000000000000000000100000000000000001,
-	0b0001000000000000000001100000000000000011,
-	0b0001010111110110000000000000011000000010,
-	0b0010010000000000000000000000000000000100,
-	0b1001001000000000000000000000000000000000
-	//JmooooojjjjjjjjwwwwwwwwrrrrrrrrIiiiiiiii
-};
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 typedef unsigned __int8 byte;
+typedef uint16_t word;			  // Common data size of system
 
-byte RAM[MEM_SIZE];
-uint32_t REG[REG_SIZE];
+#define IST_SIZE sizeof(uint16_t) // Instruction size
+#define MEM_SIZE UINT16_MAX		  // Memory size
+#define ROM_SIZE 128			  // Program memory size
 
-uint32_t path_a, path_b, output;
-
-union IST {
-	byte bytes[IST_SIZE];
-	uint64_t chunk;
+enum REG { // Register indexes
+	R0 = 0,
+	R1,
+	R2,
+	R3,
+	R4,
+	R5,
+	R6,
+	R7,
+	RPC,   // Program counter
+	RCOND, // Condtional flags register
+	RCOUNT
 };
 
-union IST ist;
+enum OPCODE {// Instruction Format
+	ADD = 1, // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 + R3 or R1 <- R2 + I
+	SUB,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 - R3 or R1 <- R2 - I
+	MUL,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 * R3 or R1 <- R2 * I
+	DIV,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 / R3 or R1 <- R2 / I
+	INC,	 // oooooddd00000000 || oooooddd0001iiii R1 <- R1 + 1 or R1 <- R1 + I
+	DEC,	 // oooooddd00000000 || oooooddd0001iiii R1 <- R2 - 1 or R1 <- R2 - I
+	SHR,	 // ooooodddsss00000					 R1 <- R2 >> 1
+	SHL,	 // ooooodddsss00000					 R1 <- R2 << 1
+	NOT,	 // ooooodddsss00000					 R1 <- ~R2
+	OR,		 // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 | R3 or R1 <- R2 | I
+	AND,	 // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 & R3 or R1 <- R2 & I
+	XOR,	 // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 ^ R3 or R1 <- R2 ^ I
+	LDR,	 // ooooodddsss00000 || oooooddd0001iiii R1 <- R2 or R1 <- I
+	LD, 	 // ooooodddaaaaaaaa					 R1 <- MEM(PC + A)
+	LDI,	 // ooooodddpppppppp					 R1 <- MEM(MEM(PC + A))
+	ST, 	 // ooooosssaaaaaaaa					 MEM(A) <- R1
+	STI,	 // ooooossspppppppp					 MEM(MEM(A)) <- R1
+	BR,		 // ooooonzpaaaaaaaa					 Branch if flag set: PC <- PC + A
+	JMP,	 // ooooo000sss00000 || ooooo0000001iiii PC <- R1 or PC <- I
+	JSR,	 // ooooo1aaaaaaaaaa					 R[7] <- PC, PC <- A
+	JSRR,	 // ooooo000sss00000					 R[7] <- PC, PC <- R1
+	RET,	 // ooooo00011100000					 PC <- R[7]
+	CLR,	 // oooooddd00000000					 R1 <- 0
+	IN,		 // oooooddd00000000					 R1 <- IN
+	OUT,	 // ooooo000sss00000					 OUT <- R1
+};
 
-clock_t clock_time = 0;
+const word ROM[ROM_SIZE] = { // Program instructions to be inserted at the start of memory
+	// Current Program: Takes in two values and outputs their product and repeats
+	0b1100000100000000,// IN 1
+	0b1100001000000000,// IN 2
+	0b0110101100010001,// LDR R3 1
+	0b1011110000000000,// CLR R4
+	0b0001000001000001,// SUB R0 R2 R1
+	0b1001001100000011,// BRpz 3
+	0b0110110100100000,// LDR R5 R1
+	0b0110100101000000,// LDR R1 R2
+	0b0110101010100000,// LDR R2 R5
+	0b0101110101100010,// AND R5 R3 R2
+	0b0001000010110000,// SUB R0 R5 0
+	0b1001001000000001,// BRz 1
+	0b0000110010000001,// ADD R4 R4 R1
+	0b0100000100100000,// SHL R1 R1
+	0b0100001101100000,// SHL R3 R3
+	0b0001000001000011,// SUB R0 R2 R3
+	0b1001001111111000,// BRpz -8
+	0b1100100010000000,// OUT R4
+	0b1001100000010000,// JMP 0
+};
 
-int state = 0;
-int ram_mode = 0;
+const long CYCLE = 500;	    // Time in milliseconds between instruction execution or each clock cycle
+const byte LOG_LEVEL = 0;   // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
 
-uint32_t pc = 0;
+word RAM[MEM_SIZE] = { 0 }; // Memory
+word REG[RCOUNT];			// Registers
 
-void system_log(const int level, const char* locale, const char* message, const int num,...) {
+word inst;					// Current instruction
+
+clock_t clock_time = 0;		// Clock cycle accumulator
+
+int state = 0;				// System state
+
+void system_log(const int level, const char* locale, const char* message, const int num,...) { // System logging
 	if (level >= LOG_LEVEL) {
 		va_list valist;
 		char* type;
@@ -109,10 +102,10 @@ void system_log(const int level, const char* locale, const char* message, const 
 		else if (level == 2) {
 			type = "ERROR";
 		} else if (level == 3) {
-			type = "OUTPUT";
+			type = "OUT";
 		}
 		else if (level == 4) {
-			type = "INPUT";
+			type = "IN";
 		}
 		else {
 			printf("[N/A]");
@@ -121,216 +114,271 @@ void system_log(const int level, const char* locale, const char* message, const 
 		printf("[%s]|%s| %s ", type, locale, message);
 		va_start(valist, num);
 		for (int i = 0; i < num; i++) {
-			printf("%lu ", va_arg(valist, uint32_t));
+			printf("%d ", va_arg(valist, __int16));
 		}
 		va_end(valist);
 		printf("\n");
 	}
 }
 
-int ist_fetch(const byte address, const uint64_t ram) {
-	if (ram) {
-		return ram_ist_fetch(address);
+word sign_extend(word x, word bit_count) // Extension of 8 bit values to 16 bit for 2's complement
+{
+	if ((x >> (bit_count - 1)) & 1) {
+		x |= (0xFFFF << bit_count);
 	}
-	if (address >= MEM_SIZE) {
-		system_log(1, "ROM", "Address out of reach", 1, address);
-		return 1;
-	}
-	ist.chunk = ROM[address];
-	system_log(0, "ROM", "IST fetch", 1, address);
-	pc = address;
-	return 0;
+	return x;
 }
 
-int ram_ist_fetch(const byte address) {
-	if (address > MEM_SIZE - 9) {
+int ist_fetch(const word address) { // Fetches the next instruction from memory
+	if (address + 1 >= MEM_SIZE) {
 		system_log(1, "RAM", "Address out of reach", 1, address);
 		return 1;
 	}
-	for (byte i = 0; i < IST_SIZE; i++) {
-		ist.bytes[i] = RAM[address + i];
-	}
-	system_log(0, "RAM", "IST fetch", 1, address);
-	pc = address / IST_SIZE;
+	inst = RAM[address];
+	system_log(0, "RAM", "IST fetch", 2, address, inst);
+	REG[RPC] = address;
 	return 0;
 }
 
-int ist_execute() {
-	output = path_a = path_b = 0;
-	byte buffer, branch = 0, ram_write = 0, mem_branch = 0;
-	if ((OPCODE & ist.chunk) >> 33 == 15) {
-		system_log(4, "CPU", "SCAN", 0);
-		uint32_t temp;
-		scanf_s("%lu", &temp);
-		if (temp > UINT32_MAX) {
-			system_log(1, "CPU", "Buffer Overflow", 0);
+void set_flags(__int16 value) { // Updates the conditional flag register
+	REG[RCOND] = ((value < 0) << 2) | ((value == 0) << 1) | (value > 0);
+	system_log(0, "REG", "Set Flags", 3, (REG[RCOND] & 0b100) >> 2, (REG[RCOND] & 0b10) >> 1, REG[RCOND] & 0b1);
+}
+
+int ist_execute() { // Executes the current instruction
+	REG[RPC]++;		// Increment program counter automatically
+	const byte opcode = inst >> 11;
+	switch (opcode) { // Test cases for each legal opcode - illegal opcodes cause a system error
+		case 0:		  // Following are brief descriptions of the opcodes; Exact functions listed at top of file	
+			break;
+		case ADD: {   // Add two values and save them to a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
+			REG[dest] = val1 + val2;
+			system_log(0, "ALU", "ADD", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
 		}
-		else {
-			path_b = temp;
+			break;
+		case SUB: {	  // Subtract two values and save them to a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
+			REG[dest] = val1 - val2;
+			system_log(0, "ALU", "SUB", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
 		}
-	} else if ((OPCODE & ist.chunk) >> 33 == 17) {
-		if (READ_B & ist.chunk) {
-			buffer = (READ_B & ist.chunk);
-			path_b = RAM[buffer - 1];
-			system_log(0, "RAM", "Read Address", 2, buffer, path_b);
+			break;
+		case MUL: {	  // Multiply two values and save them to a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
+			REG[dest] = val1 * val2;
+			system_log(0, "ALU", "MUL", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
 		}
-	} else {
-		if (IMD_ON & ist.chunk) {
-			path_b = IMMEDIATE & ist.chunk;
-			system_log(0, "CPU", "Immediate", 1, path_b);
-		}
-		else if (READ_B & ist.chunk) {
-			buffer = (READ_B & ist.chunk);
-			if (buffer <= REG_SIZE) {
-				path_b = REG[buffer - 1];
-				system_log(0, "CPU", "Read B REG", 2, buffer, path_b);
+			break;
+		case DIV: {	  // Divide two values and save to a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
+			if (val2 == 0) {
+				system_log(2, "ALU", "DIV ZERO ", 3, dest, val1, val2);
 			}
 			else {
-				system_log(1, "CPU", "Register out of reach", 1, buffer);
+				REG[dest] = val1 / val2;
+				system_log(0, "ALU", "DIV", 4, dest, val1, val2, REG[dest]);
+				set_flags(REG[dest]);
 			}
 		}
+			break;
+		case INC: {	  // Increment the value of a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : 1;
+			REG[dest] = val1 + val2;
+			system_log(0, "ALU", "INC", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case DEC: {	  // Decrement the value of a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : 1;
+			REG[dest] = val1 - val2;
+			system_log(0, "ALU", "DEC", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case SHR: {	  // Right shift a value and save to a register
+			word dest = (inst >> 8) & 0b111;
+			word val = REG[(inst >> 5) & 0b111];
+			REG[dest] = val >> 1;
+			system_log(0, "ALU", "SHR", 4, dest, val, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case SHL: {	  // Left shift a value and save to a register
+			word dest = (inst >> 8) & 0b111;
+			word val = REG[(inst >> 5) & 0b111];
+			REG[dest] = val << 1;
+			system_log(0, "ALU", "SHL", 4, dest, val, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case NOT: {	  // Get the bitwise complement of a value and save to a register
+			word dest = (inst >> 8) & 0b111;
+			word val = REG[(inst >> 5) & 0b111];
+			REG[dest] = ~val;
+			system_log(0, "ALU", "NOT", 4, dest, val, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case OR: {	  // OR two values and save to a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
+			REG[dest] = val1 | val2;
+			system_log(0, "ALU", "OR", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case AND: {	  // AND two values and save to a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
+			REG[dest] = val1 & val2;
+			system_log(0, "ALU", "AND", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case XOR: {	  // XOR two values and save to a register
+			word dest = (inst >> 8) & 0b111;
+			word val1 = REG[(inst >> 5) & 0b111];
+			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
+			REG[dest] = val1 ^ val2;
+			system_log(0, "ALU", "XOR", 4, dest, val1, val2, REG[dest]);
+			set_flags(REG[dest]);
+		}
+			break;
+		case LDR: {	  // Load an internal value into a register
+			word dest = (inst >> 8) & 0b111;
+			word val = (inst >> 4) & 1 ? (inst & 0b1111) : REG[(inst >> 5) & 0b111];
+			REG[dest] = val;
+			system_log(0, "REG", "LDR", 2, dest, val);
+			set_flags(val);
+		}
+			break;
+		case LD: {	  // Load a value from memory into a register
+			word dest = (inst >> 8) & 0b111;
+			word address = REG[RPC] + sign_extend(inst & 0xff, 8);
+			word val = RAM[address];
+			REG[dest] = val;
+			system_log(0, "RAM", "LD", 3, dest, address, val);
+			set_flags(val);
+		}
+			break;
+		case LDI: {	  // Load the corresponding value of a pointer in memory
+			word dest = (inst >> 8) & 0b111;
+			word address = RAM[REG[RPC] + sign_extend(inst & 0xff, 8)];
+			word val = RAM[address];
+			REG[dest] = val;
+			system_log(0, "RAM", "LDI", 3, dest, address, val);
+			set_flags(val);
+		}
+			break;
+		case ST: {	 // Store a value from a register in memory
+			word val = REG[(inst >> 8) & 0b111];
+			word address = REG[RPC] + sign_extend(inst & 0xff, 8);
+			RAM[address] = val;
+			system_log(0, "RAM", "ST", 2, address, val);
+			set_flags(val);
+		}
+			break;
+		case STI: {	 // Store a value from a register at the value of a pointer in memory
+			word val = REG[(inst >> 8) & 0b111];
+			word address = RAM[REG[RPC] + sign_extend(inst & 0xff, 8)];
+			RAM[address] = val;
+			system_log(0, "RAM", "ST", 2, address, val);
+			set_flags(val);
+		}
+			break;
+		case BR: {	  // Branch to a different instruction in memory based on the conditional flags
+			word cond = (inst >> 8) & 0b111;
+			if (cond & REG[RCOND]) {
+				word offset = sign_extend(inst & 0xff, 8);
+				word address = REG[RPC] + offset;
+				REG[RPC] = address;
+				system_log(0, "CPU", "BR", 1, offset);
+			}
+		}
+			break;
+		case RET:	  // Return from subroutine
+		case JMP: {	  // Uncondtionally jump to a different instruction in memory
+			word address = (inst >> 4) & 1 ? inst & 0b1111 : REG[(inst >> 5) & 0b111];
+			REG[RPC] = address;
+			system_log(0, "CPU", "JMP", 1, address);
+		}
+			break;
+		case JSR: {	  // Jump to subroutine address
+			word address = REG[RPC] + sign_extend(inst & 0x3ff, 10);
+			REG[R7] = REG[RPC];
+			REG[RPC] = address;
+			system_log(0, "CPU", "JSR", 1, address);
+		}
+			break;
+		case JSRR: {  // Jump to subroutine address stored in a register
+			word address = REG[(inst >> 5) & 0b111];
+			REG[R7] = REG[RPC];
+			REG[RPC] = address;
+			system_log(0, "CPU", "JSRR", 1, address);
+		}
+			break;
+		case CLR: {	  // Clear a register
+			word reg = (inst >> 8) & 0b111;
+			REG[reg] = 0;
+			system_log(0, "REG", "CLR", 1, reg);
+		}
+			break;
+		case IN: {	  // Scan for input and store the value in a register
+			system_log(4, "CPU", "IN", 0);
+			int buffer;
+			scanf_s("%d", &buffer);
+			if (buffer > UINT16_MAX) {
+				system_log(1, "CPU", "Buffer Overflow", 0);
+			}
+			REG[(inst >> 8) & 0b111] = (word)buffer;
+		}
+			break;
+		case OUT: {	  // Output the value in a register
+			system_log(3, "CPU", "OUT", 0);
+			word reg = (inst >> 5) & 0b111;
+			printf("%d\n", REG[reg]);
+		}
+			break;
+		default:	  // Invalid opcode case
+			system_log(2, "CPU", "Invalid Opcode", 1, opcode);
+			return 1;
+			break;
 	}
-	if (READ_A & ist.chunk) {
-		buffer = (READ_A & ist.chunk) >> 9;
-		path_a = REG[buffer - 1];
-		system_log(0, "CPU", "Read A REG", 2, buffer, path_a);
-	}
-	if (pc >= MEM_SIZE - 1) {
-		pc = -1;
-	}
-	output = path_a + path_b;
-	switch ((OPCODE & ist.chunk) >> 33) {
-	case 1:
-		output = path_a - path_b;
-		system_log(0, "ALU", "SUB", 2, path_a, path_b);
-		break;
-	case 2:
-		output = path_a * path_b;
-		system_log(0, "ALU", "MULT", 2, path_a, path_b);
-		break;
-	case 3:
-		system_log(0, "ALU", "DIV", 2, path_a, path_b);
-		if (path_b == 0) {
-			system_log(2, "ALU", "Division by Zero", 2, path_a, path_b);
-			output = 256;
-		}
-		else {
-			output = path_a / path_b;
-		}
-		break;
-	case 4:
-		output = path_a | path_b;
-		system_log(0, "ALU", "OR", 2, path_a, path_b);
-		break;
-	case 5:
-		output = path_a & path_b;
-		system_log(0, "ALU", "AND", 2, path_a, path_b);
-		break;
-	case 6:
-		output = path_a ^ path_b;
-		system_log(0, "ALU", "XOR", 2, path_a, path_b);
-		break;
-	case 7:
-		output = (path_a + path_b) >> 1;
-		system_log(0, "ALU", "SHIFT_R", 2, path_a, path_b);
-		break;
-	case 8:
-		output = (path_a + path_b) << 1;
-		system_log(0, "ALU", "SHIFT_L", 2, path_a, path_b);
-		break;
-	case 9:
-		if (path_a == path_b) {
-			branch = (JMP & ist.chunk) >> 25;
-		}
-		system_log(0, "ALU", "JE", 2, path_a, path_b);
-		break;
-	case 10:
-		if (path_a <= path_b) {
-			branch = (JMP & ist.chunk) >> 25;
-		}
-		system_log(0, "ALU", "JLE", 2, path_a, path_b);
-		break;
-	case 11:
-		if (path_a >= path_b) {
-			branch = (JMP & ist.chunk) >> 25;
-		}
-		system_log(0, "ALU", "JGE", 2, path_a, path_b);
-		break;
-	case 12:
-		if (path_a < path_b) {
-			branch = (JMP & ist.chunk) >> 25;
-		}
-		system_log(0, "ALU", "JL", 2, path_a, path_b);
-		break;
-	case 13:
-		if (path_a > path_b) {
-			branch = (JMP & ist.chunk) >> 25;
-		}
-		system_log(0, "ALU", "JG", 2, path_a, path_b);
-		break;
-	case 14:
-		if (path_a != path_b) {
-			branch = (JMP & ist.chunk) >> 25;
-		}
-		system_log(0, "ALU", "JNE", 2, path_a, path_b);
-		break;
-	case 16:
-		ram_write = 1;
-		if (WRITE & ist.chunk) {
-			buffer = (WRITE & ist.chunk) >> 17;
-			RAM[buffer - 1] = output;
-			system_log(0, "RAM", "Write Address", 2, buffer, output);
-		}
-	case 18:
-		system_log(3, "CPU", "", 1, output);
-		break;
-	}
-	if (!ram_write && WRITE & ist.chunk) {
-		buffer = (WRITE & ist.chunk) >> 17;
-		REG[buffer - 1] = output;
-		system_log(0, "REG", "Write REG", 2, buffer, output);
-	}
-	uint64_t ram_ist = (RAM_IST & ist.chunk) >> 38;
-	if (ram_ist) {
-		system_log(0, "CPU", "RAM Fetch Call", 0);
-	}
-	if (GOTO & ist.chunk) {
-		system_log(0, "CPU", "GOTO", 1, output);
-		mem_branch = 1;
-		branch = 1;
-	}
-	if (branch || ram_mode != ram_ist) {
-		if (ram_ist || mem_branch) {
-			branch = 0;
-			pc = output;
-		}
-		pc += branch;
-		if (pc >= MEM_SIZE) {
-			pc -= MEM_SIZE;
-		}
-		if (ram_mode != ram_ist) {
-			ram_mode = ram_ist;
-			pc = output;
-		}
-		ist_fetch(pc, ram_ist);
-	}
-	else {
-		ist_fetch(++pc, ram_ist);
-	}
-	return 0;
+	return ist_fetch(REG[RPC]); // Fetch the next instruction
 }
 
-int start() {
+int start() {											// Start the system
 	system_log(0, "CPU", "Starting", 0);
-	return ist_fetch(0, 0);
+	for (int i = 0; i < ROM_SIZE && i < MEM_SIZE; i++) {// Load the program memory into memory
+		RAM[i] = ROM[i];
+	}
+	return ist_fetch(0);								// Fetch the first instruction
 }
 
 int main() {
-	start();
-	while (!state) {
-		if (clock() - clock_time >= CYCLE) {
-			clock_time = clock();
-			state = ist_execute();
+	if (!start()) {
+		while (!state) {								// Clock cycle
+			if (clock() - clock_time >= CYCLE) {
+				clock_time = clock();
+				state = ist_execute();
+			}
 		}
 	}
 	return 0;
