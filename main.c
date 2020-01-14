@@ -26,7 +26,7 @@ enum REG { // Register indexes
 	RCOUNT
 };
 
-enum OPCODE {// Instruction Format
+enum OPCODE {//|Instruction Format                  |Opcode function				|
 	ADD = 1, // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 + R3 or R1 <- R2 + I
 	SUB,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 - R3 or R1 <- R2 - I
 	MUL,	 // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 * R3 or R1 <- R2 * I
