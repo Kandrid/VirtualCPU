@@ -36,9 +36,9 @@ enum OPCODE {// Instruction Format                   Opcode function
 	SHR,     // ooooodddsss00000                     R1 <- R2 >> 1
 	SHL,     // ooooodddsss00000                     R1 <- R2 << 1
 	NOT,     // ooooodddsss00000                     R1 <- ~R2
-	OR,      // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 | R3 or R1 <- R2 | I
-	AND,     // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 & R3 or R1 <- R2 & I
-	XOR,     // ooooodddsss00SSS || oooooddd0001iiii R1 <- R2 ^ R3 or R1 <- R2 ^ I
+	OR,      // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 | R3 or R1 <- R2 | I
+	AND,     // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 & R3 or R1 <- R2 & I
+	XOR,     // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 ^ R3 or R1 <- R2 ^ I
 	LDR,     // ooooodddsss00000 || oooooddd0001iiii R1 <- R2 or R1 <- I
 	LD,      // ooooodddaaaaaaaa                     R1 <- MEM(PC + A)
 	LDI,     // ooooodddpppppppp                     R1 <- MEM(MEM(PC + A))
@@ -54,31 +54,8 @@ enum OPCODE {// Instruction Format                   Opcode function
 	OUT,     // ooooo000sss00000                     OUT <- R1
 };
 
-const word ROM[ROM_SIZE] = { // Program instructions to be inserted at the start of memory
-	// Current Program: Takes in two values and outputs their product and repeats
-	0b1100000100000000,// IN R1
-	0b1100001000000000,// IN R2
-	0b0110101100010001,// LDR R3 1
-	0b1011110000000000,// CLR R4
-	0b0001000001000001,// SUB R0 R2 R1
-	0b1001001100000011,// BRpz 3
-	0b0110110100100000,// LDR R5 R1
-	0b0110100101000000,// LDR R1 R2
-	0b0110101010100000,// LDR R2 R5
-	0b0101110101100010,// AND R5 R3 R2
-	0b0001000010110000,// SUB R0 R5 0
-	0b1001001000000001,// BRz 1
-	0b0000110010000001,// ADD R4 R4 R1
-	0b0100000100100000,// SHL R1 R1
-	0b0100001101100000,// SHL R3 R3
-	0b0001000001000011,// SUB R0 R2 R3
-	0b1001001111111000,// BRpz -8
-	0b1100100010000000,// OUT R4
-	0b1001100000010000,// JMP 0
-};
-
-const long CYCLE = 500;     // Time in milliseconds between instruction execution or each clock cycle
-const byte LOG_LEVEL = 0;   // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
+long CYCLE = 0;     // Time in milliseconds between instruction execution or each clock cycle
+byte LOG_LEVEL = 0;   // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
 
 word RAM[MEM_SIZE] = { 0 }; // Memory
 word REG[RCOUNT];           // Registers
@@ -194,7 +171,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case INC: {	  // Increment the value of a register
 			word dest = (inst >> 8) & 0b111;
-			word val1 = REG[(inst >> 5) & 0b111];
+			word val1 = REG[dest];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : 1;
 			REG[dest] = val1 + val2;
 			system_log(0, "ALU", "INC", 4, dest, val1, val2, REG[dest]);
@@ -203,7 +180,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case DEC: {	  // Decrement the value of a register
 			word dest = (inst >> 8) & 0b111;
-			word val1 = REG[(inst >> 5) & 0b111];
+			word val1 = REG[dest];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : 1;
 			REG[dest] = val1 - val2;
 			system_log(0, "ALU", "DEC", 4, dest, val1, val2, REG[dest]);
@@ -370,20 +347,50 @@ int ist_execute() { // Executes the current instruction
 	return ist_fetch(REG[RPC]); // Fetch the next instruction
 }
 
+char* readFileBytes(const char* name, long* size)
+{
+	#pragma warning(suppress : 4996)
+	FILE* fl = fopen(name, "r");
+	char* ret = NULL;
+	if (fl != 0) {
+		fseek(fl, 0, SEEK_END);
+		long len = ftell(fl);
+		*size = len;
+		ret = malloc(len);
+		fseek(fl, 0, SEEK_SET);
+		fread(ret, 1, len, fl);
+		fclose(fl);
+	}
+	else {
+		*size = 0;
+	}
+	return ret;
+}
+
 int start() {                                           // Start the system
 	system_log(0, "CPU", "Starting", 0);
-	for (int i = 0; i < ROM_SIZE && i < MEM_SIZE; i++) {// Load the program memory into memory
-		RAM[i] = ROM[i];
+	long size;
+	char* buffer = readFileBytes("data.inst", &size);
+	for (int i = 0; i < MEM_SIZE && i < size / 2 + 1; i++) {// Load the program memory into memory
+		RAM[i] = *((uint16_t*)&buffer[i * 2]);
 	}
+	free(buffer);
 	return ist_fetch(0);                                // Fetch the first instruction
 }
 
-int main() {
-	if (!start()) {
-		while (!state) {                                // Clock cycle
-			if (clock() - clock_time >= CYCLE) {
-				clock_time = clock();
-				state = ist_execute();
+int main(int argc, char* argv[]) {
+	if (argc != 3) {
+		printf("Clock Cycle and Log level required\n");
+	}
+	else {
+		CYCLE = atoi(argv[1]);
+		LOG_LEVEL = atoi(argv[2]);
+		if (!start()) {
+			while (!state) {                                // Clock cycle
+				if (clock() - clock_time >= CYCLE) {
+					clock_time = clock();
+					state = ist_execute();
+				}
 			}
 		}
 	}
