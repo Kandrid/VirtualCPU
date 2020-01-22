@@ -39,11 +39,12 @@ enum OPCODE {// Instruction Format                   Opcode function
 	OR,      // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 | R3 or R1 <- R2 | I
 	AND,     // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 & R3 or R1 <- R2 & I
 	XOR,     // ooooodddsss00SSS || ooooodddsss1iiii R1 <- R2 ^ R3 or R1 <- R2 ^ I
-	LDR,     // ooooodddsss00000 || oooooddd0001iiii R1 <- R2 or R1 <- I
-	LD,      // ooooodddaaaaaaaa                     R1 <- MEM(PC + A)
-	LDI,     // ooooodddpppppppp                     R1 <- MEM(MEM(PC + A))
+	LDR,     // ooooodddbbbfffff                     R1 <- MEM(R2 + F)
+	LD,      // ooooodddaaaaaaaa                     R1 <- MEM(A)
+	LDI,     // ooooodddaaaaaaaa                     R1 <- MEM(MEM(A))
 	ST,      // ooooosssaaaaaaaa                     MEM(A) <- R1
-	STI,     // ooooossspppppppp                     MEM(MEM(A)) <- R1
+	STI,     // ooooosssaaaaaaaa                     MEM(MEM(A)) <- R1
+	STR,     // ooooosssbbbfffff                     MEM(R2 + F) <- R1
 	BR,      // ooooonzpaaaaaaaa                     Branch if flag set: PC <- PC + A
 	JMP,     // ooooo000sss00000 || ooooo0000001iiii PC <- R1 or PC <- I
 	JSR,     // ooooo1aaaaaaaaaa                     R[7] <- PC, PC <- A
@@ -51,7 +52,8 @@ enum OPCODE {// Instruction Format                   Opcode function
 	RET,     // ooooo00011100000                     PC <- R[7]
 	CLR,     // oooooddd00000000                     R1 <- 0
 	IN,      // oooooddd00000000                     R1 <- IN
-	OUT,     // ooooo000sss00000                     OUT <- R1
+	OUT,     // ooooonffsss00000                     OUT <- R1
+	SET,     // ooooodddiiiiiiii                     R1 <- I
 };
 
 long CYCLE = 0;     // Time in milliseconds between instruction execution or each clock cycle
@@ -238,9 +240,11 @@ int ist_execute() { // Executes the current instruction
 			set_flags(REG[dest]);
 		}
 			break;
-		case LDR: {	  // Load an internal value into a register
+		case LDR: {	  // Load a value from memory using an address stored in a register
 			word dest = (inst >> 8) & 0b111;
-			word val = (inst >> 4) & 1 ? (inst & 0b1111) : REG[(inst >> 5) & 0b111];
+			word base = REG[(inst >> 5) & 0b111];
+			word offset = sign_extend(inst & 0b11111, 5);
+			word val = RAM[base + offset];
 			REG[dest] = val;
 			system_log(0, "REG", "LDR", 2, dest, val);
 			set_flags(val);
@@ -248,7 +252,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case LD: {	  // Load a value from memory into a register
 			word dest = (inst >> 8) & 0b111;
-			word address = REG[RPC] + sign_extend(inst & 0xff, 8);
+			word address = sign_extend(inst & 0xff, 8);
 			word val = RAM[address];
 			REG[dest] = val;
 			system_log(0, "RAM", "LD", 3, dest, address, val);
@@ -257,7 +261,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case LDI: {	  // Load the corresponding value of a pointer in memory
 			word dest = (inst >> 8) & 0b111;
-			word address = RAM[REG[RPC] + sign_extend(inst & 0xff, 8)];
+			word address = RAM[sign_extend(inst & 0xff, 8)];
 			word val = RAM[address];
 			REG[dest] = val;
 			system_log(0, "RAM", "LDI", 3, dest, address, val);
@@ -266,7 +270,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case ST: {	 // Store a value from a register in memory
 			word val = REG[(inst >> 8) & 0b111];
-			word address = REG[RPC] + sign_extend(inst & 0xff, 8);
+			word address = sign_extend(inst & 0xff, 8);
 			RAM[address] = val;
 			system_log(0, "RAM", "ST", 2, address, val);
 			set_flags(val);
@@ -274,9 +278,18 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case STI: {	 // Store a value from a register at the value of a pointer in memory
 			word val = REG[(inst >> 8) & 0b111];
-			word address = RAM[REG[RPC] + sign_extend(inst & 0xff, 8)];
+			word address = RAM[sign_extend(inst & 0xff, 8)];
 			RAM[address] = val;
 			system_log(0, "RAM", "ST", 2, address, val);
+			set_flags(val);
+		}
+			break;
+		case STR: {	 // Store a value from a register in memory using an address stored in a register
+			word val = REG[(inst >> 8) & 0b111];
+			word base = (inst >> 5) & 0b111;
+			word offset = inst & 0b11111;
+			RAM[base + offset] = val;
+			system_log(0, "RAM", "ST", 2, base + offset, val);
 			set_flags(val);
 		}
 			break;
@@ -336,7 +349,25 @@ int ist_execute() { // Executes the current instruction
 		case OUT: {	 // Output the value in a register
 			system_log(3, "CPU", "OUT", 0);
 			word reg = (inst >> 5) & 0b111;
-			printf("%d\n", (__int16)REG[reg]);
+			word format = (inst >> 8) & 0b11;
+			if (format == 1) {
+				printf("%d", (__int16)REG[reg]);
+			}
+			else if (format == 2) {
+				printf("%c", (char)REG[reg]);
+			} else {
+				printf("%d", REG[reg]);
+			}
+			if ((inst >> 10) & 1) {
+				printf("\n");
+			}
+		}
+			break;
+		case SET: {	 // Set the value of a register
+			word dest = (inst >> 8) & 0b111;
+			word val = inst & 0xff;
+			REG[dest] = val;
+			system_log(0, "REG", "SET", 2, dest, val);
 		}
 			break;
 		default:     // Invalid opcode case
