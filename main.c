@@ -54,6 +54,7 @@ enum OPCODE {// Instruction Format                   Opcode function
 	IN,      // oooooddd00000000                     R1 <- IN
 	OUT,     // ooooonffsss00000                     OUT <- R1
 	SET,     // ooooodddiiiiiiii                     R1 <- I
+	GETS,    // ooooo000sss00000                     R1 <- (char[])IN
 };
 
 long CYCLE = 0;     // Time in milliseconds between instruction execution or each clock cycle
@@ -344,6 +345,7 @@ int ist_execute() { // Executes the current instruction
 			else {
 				REG[(inst >> 8) & 0b111] = (word)buffer;
 			}
+			fflush(stdin);
 		}
 			break;
 		case OUT: {	 // Output the value in a register
@@ -368,6 +370,18 @@ int ist_execute() { // Executes the current instruction
 			word val = inst & 0xff;
 			REG[dest] = val;
 			system_log(0, "REG", "SET", 2, dest, val);
+		}
+			break;
+		case GETS: {
+			word dest = REG[(inst >> 5) & 0b111];
+			system_log(4, "CPU", "GETS", 1, dest);
+			char buffer[128];
+			scanf_s("%127s", buffer, (unsigned)_countof(buffer));
+			int i = 0;
+			do {
+				RAM[dest + i] = buffer[i];
+			} while (i < 32 && buffer[i++] != '\n');
+			getchar();
 		}
 			break;
 		default:     // Invalid opcode case
