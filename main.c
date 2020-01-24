@@ -55,6 +55,7 @@ enum OPCODE {// Instruction Format                   Opcode function
 	OUT,     // ooooonffsss00000                     OUT <- R1
 	SET,     // ooooodddiiiiiiii                     R1 <- I
 	GETS,    // ooooo000sss00000                     R1 <- (char[])IN
+	PUTS,	 // ooooon00sss00000                     OUT <- (char[])MEM(R1)
 };
 
 long CYCLE = 0;     // Time in milliseconds between instruction execution or each clock cycle
@@ -381,7 +382,21 @@ int ist_execute() { // Executes the current instruction
 			do {
 				RAM[dest + i] = buffer[i];
 			} while (i < 32 && buffer[i++] != '\n');
+			RAM[dest + i] = '\0';
 			getchar();
+		}
+			break;
+		case PUTS: {
+			word source = REG[(inst >> 5) & 0b111];
+			system_log(3, "CPU", "PUTS", 1, source);
+			while (1) {
+				char c = (char)RAM[source++];
+				if (c == '\0' || source == UINT16_MAX) { break; }
+				printf("%c", c);
+			}
+			if ((inst >> 10) & 1) {
+				printf("\n");
+			}
 		}
 			break;
 		default:     // Invalid opcode case
@@ -420,6 +435,7 @@ int start() {                                           // Start the system
 		RAM[i] = *((uint16_t*)&buffer[i * 2]);
 	}
 	free(buffer);
+	set_flags(0);
 	return ist_fetch(0);                                // Fetch the first instruction
 }
 
