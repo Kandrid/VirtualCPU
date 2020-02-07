@@ -10,7 +10,6 @@ typedef uint16_t word;            // Common data size of system
 
 #define IST_SIZE sizeof(uint16_t) // Instruction size
 #define MEM_SIZE UINT16_MAX       // Memory size
-#define ROM_SIZE 128              // Program memory size
 
 enum REG { // Register indexes
 	R0 = 0,
@@ -58,8 +57,8 @@ enum OPCODE {// Instruction Format                   Opcode function
 	PUTS,	 // ooooon00sss00000                     OUT <- (char[])MEM(R1)
 };
 
-long CYCLE = 0;     // Time in milliseconds between instruction execution or each clock cycle
-byte LOG_LEVEL = 0;   // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
+long CYCLE = 0;             // Time in milliseconds between instruction execution or each clock cycle
+byte LOG_LEVEL = 0;         // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
 
 word RAM[MEM_SIZE] = { 0 }; // Memory
 word REG[RCOUNT];           // Registers
@@ -313,7 +312,7 @@ int ist_execute() { // Executes the current instruction
 		}
 			break;
 		case JSR: {  // Jump to subroutine address
-			word address = REG[RPC] + sign_extend(inst & 0x3ff, 10);
+			word address = sign_extend(inst & 0x3ff, 10);
 			REG[R7] = REG[RPC];
 			REG[RPC] = address;
 			system_log(0, "CPU", "JSR", 1, address);
@@ -383,7 +382,7 @@ int ist_execute() { // Executes the current instruction
 				RAM[dest + i] = buffer[i];
 			} while (i < 32 && buffer[i++] != '\n');
 			RAM[dest + i] = '\0';
-			getchar();
+			char tmp = getchar();
 		}
 			break;
 		case PUTS: {
@@ -418,7 +417,9 @@ char* readFileBytes(const char* name, long* size)
 		*size = len;
 		ret = malloc(len);
 		fseek(fl, 0, SEEK_SET);
-		fread(ret, 1, len, fl);
+		if (ret != 0) {
+			fread(ret, 1, len, fl);
+		}
 		fclose(fl);
 	}
 	else {
