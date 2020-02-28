@@ -244,7 +244,7 @@ int ist_execute() { // Executes the current instruction
 		case LDR: {	  // Load a value from memory using an address stored in a register
 			word dest = (inst >> 8) & 0b111;
 			word base = REG[(inst >> 5) & 0b111];
-			word offset = sign_extend(inst & 0b11111, 5);
+			word offset = inst & 0b11111;
 			word val = RAM[base + offset];
 			REG[dest] = val;
 			system_log(0, "REG", "LDR", 2, dest, val);
@@ -253,7 +253,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case LD: {	  // Load a value from memory into a register
 			word dest = (inst >> 8) & 0b111;
-			word address = sign_extend(inst & 0xff, 8);
+			word address = inst & 0xff;
 			word val = RAM[address];
 			REG[dest] = val;
 			system_log(0, "RAM", "LD", 3, dest, address, val);
@@ -262,7 +262,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case LDI: {	  // Load the corresponding value of a pointer in memory
 			word dest = (inst >> 8) & 0b111;
-			word address = RAM[sign_extend(inst & 0xff, 8)];
+			word address = RAM[inst & 0xff, 8];
 			word val = RAM[address];
 			REG[dest] = val;
 			system_log(0, "RAM", "LDI", 3, dest, address, val);
@@ -271,7 +271,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case ST: {	 // Store a value from a register in memory
 			word val = REG[(inst >> 8) & 0b111];
-			word address = sign_extend(inst & 0xff, 8);
+			word address = inst & 0xff;
 			RAM[address] = val;
 			system_log(0, "RAM", "ST", 2, address, val);
 			set_flags(val);
@@ -279,7 +279,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case STI: {	 // Store a value from a register at the value of a pointer in memory
 			word val = REG[(inst >> 8) & 0b111];
-			word address = RAM[sign_extend(inst & 0xff, 8)];
+			word address = RAM[inst & 0xff];
 			RAM[address] = val;
 			system_log(0, "RAM", "ST", 2, address, val);
 			set_flags(val);
