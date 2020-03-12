@@ -85,6 +85,60 @@ COORD GetConsoleCursorPosition(HANDLE hConsoleOutput)
 	}
 }
 
+void mem_print() {
+	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	COORD init_pos = GetConsoleCursorPosition(console);
+
+	int vertical_offset = 29, horizontal_offset = 45;
+
+	COORD new_pos = { horizontal_offset, (init_pos.Y > vertical_offset ? init_pos.Y - vertical_offset : 0) };
+
+	SetConsoleCursorPosition(console, new_pos);
+
+	int table_width = 20;
+	int table_height = 25;
+	int ram_offset = 100;
+
+	for (int i = -3; i < table_width; i++) printf("---");
+
+	new_pos.Y++;
+	SetConsoleCursorPosition(console, new_pos);
+
+	printf(" REG   | ");
+
+	for (int i = 0; i < RCOUNT; i++) {
+		word value = REG[i];
+		if (((value & 0xff00) > 8) < 0x10) printf("0");
+		printf("%X ", (value & 0xff00) > 8);
+		if ((value & 0x00ff) < 0x10) printf("0");
+		printf("%X ", value & 0x00ff);
+	}
+
+	new_pos.Y++;
+	SetConsoleCursorPosition(console, new_pos);
+
+	for (int i = -3; i < table_width; i++) printf("---");
+	new_pos.Y++;
+	SetConsoleCursorPosition(console, new_pos);
+	for (int i = 0; i < table_height; i++) {
+		printf(" 0x%-4X| ", ram_offset + i * table_width / 2);
+		for (int j = 0; j < table_width / 2; j++) {
+			word value = RAM[ram_offset + i * table_width / 2 + j];
+			if (((value & 0xff00) > 8) < 0x10) printf("0");
+			printf("%X ", (value & 0xff00) > 8);
+			if ((value & 0x00ff) < 0x10) printf("0");
+			printf("%X ", value & 0x00ff);
+		}
+		new_pos.Y++;
+		SetConsoleCursorPosition(console, new_pos);
+	}
+
+	for (int i = -3; i < table_width; i++) printf("---");
+
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), init_pos);
+}
+
 void system_log(const int level, const char* locale, const char* message, const int num,...) { // System logging
 	if (level >= LOG_LEVEL) {
 		va_list valist;
@@ -114,41 +168,9 @@ void system_log(const int level, const char* locale, const char* message, const 
 		}
 		va_end(valist);
 
-		HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
-		
-		COORD init_pos = GetConsoleCursorPosition(console);
-
-		int vertical_offset = 28, horizontal_offset = 45;
-
-		COORD new_pos = { horizontal_offset, (init_pos.Y > vertical_offset ? init_pos.Y - vertical_offset : 0) };
-
-		SetConsoleCursorPosition(console, new_pos);
-
-		int table_width = 20;
-		int table_height = 27;
-		int ram_offset = 100;
-
-		for (int i = -3; i < table_width; i++) printf("---");
-		new_pos.Y++;
-		SetConsoleCursorPosition(console, new_pos);
-		for (int i = 0; i < table_height; i++) {
-			printf(" 0x%-4X| ", ram_offset + i * table_width / 2);
-			for (int j = 0; j < table_width / 2; j++) {
-				word value = RAM[ram_offset + i * table_width / 2 + j];
-				if (((value & 0xff00) > 8) < 0x10) printf("0");
-				printf("%X ", (value & 0xff00) > 8);
-				if ((value & 0x00ff) < 0x10) printf("0");
-				printf("%X ", value & 0x00ff);
-			}
-			new_pos.Y++;
-			SetConsoleCursorPosition(console, new_pos);
-		}
-
-		for (int i = -3; i < table_width; i++) printf("---");
-
-		SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), init_pos);
-
 		printf("\n");
+
+		mem_print(); // Print a preview of memory
 	}
 }
 
@@ -455,6 +477,7 @@ int ist_execute() { // Executes the current instruction
 			return 1;
 			break;
 	}
+
 	return ist_fetch(REG[RPC]); // Fetch the next instruction
 }
 
