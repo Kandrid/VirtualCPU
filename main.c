@@ -4,11 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <Windows.h>
 
 typedef unsigned __int8 byte;
 typedef uint16_t word;            // Common data size of system
 
-#define IST_SIZE sizeof(uint16_t) // Instruction size
+#define IST_SIZE sizeof(word) // Instruction size
 #define MEM_SIZE UINT16_MAX       // Memory size
 
 enum REG { // Register indexes
@@ -43,17 +44,17 @@ enum OPCODE {// Instruction Format                   Opcode function
 	LDI,     // ooooodddaaaaaaaa                     R1 <- MEM(MEM(A))
 	ST,      // ooooosssaaaaaaaa                     MEM(A) <- R1
 	STI,     // ooooosssaaaaaaaa                     MEM(MEM(A)) <- R1
-	STR,     // ooooosssbbbfffff                     MEM(R2 + F) <- R1
+	STR,     // ooooosssbbbfffff                     MEM(R2) <- R1
 	BR,      // ooooonzpaaaaaaaa                     Branch if flag set: PC <- PC + A
 	JMP,     // ooooo000sss00000 || ooooo0000001iiii PC <- R1 or PC <- I
 	JSR,     // ooooo1aaaaaaaaaa                     R[7] <- PC, PC <- A
 	JSRR,    // ooooo000sss00000                     R[7] <- PC, PC <- R1
 	RET,     // ooooo00011100000                     PC <- R[7]
 	CLR,     // oooooddd00000000                     R1 <- 0
-	IN,      // oooooddd00000000                     R1 <- IN
-	OUT,     // ooooonffsss00000                     OUT <- R1
+	IN_,     // oooooddd00000000                     R1 <- IN
+	OUT_,    // ooooonffsss00000                     OUT <- R1
 	SET,     // ooooodddiiiiiiii                     R1 <- I
-	GETS,    // ooooo000sss00000                     R1 <- (char[])IN
+	GETS,    // ooooo000sss00000                     MEM(R1) <- (char[])IN
 	PUTS,	 // ooooon00sss00000                     OUT <- (char[])MEM(R1)
 };
 
@@ -68,6 +69,21 @@ word inst;                  // Current instruction
 clock_t clock_time = 0;     // Clock cycle accumulator
 
 int state = 0;              // System state
+
+COORD GetConsoleCursorPosition(HANDLE hConsoleOutput)
+{
+	CONSOLE_SCREEN_BUFFER_INFO cbsi;
+	if (GetConsoleScreenBufferInfo(hConsoleOutput, &cbsi))
+	{
+		return cbsi.dwCursorPosition;
+	}
+	else
+	{
+		// The function failed. Call GetLastError() for details.
+		COORD invalid = { 0, 0 };
+		return invalid;
+	}
+}
 
 void system_log(const int level, const char* locale, const char* message, const int num,...) { // System logging
 	if (level >= LOG_LEVEL) {
@@ -97,6 +113,41 @@ void system_log(const int level, const char* locale, const char* message, const 
 			printf("%d ", va_arg(valist, __int16));
 		}
 		va_end(valist);
+
+		HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+		
+		COORD init_pos = GetConsoleCursorPosition(console);
+
+		int vertical_offset = 28, horizontal_offset = 45;
+
+		COORD new_pos = { horizontal_offset, (init_pos.Y > vertical_offset ? init_pos.Y - vertical_offset : 0) };
+
+		SetConsoleCursorPosition(console, new_pos);
+
+		int table_width = 20;
+		int table_height = 27;
+		int ram_offset = 100;
+
+		for (int i = -3; i < table_width; i++) printf("---");
+		new_pos.Y++;
+		SetConsoleCursorPosition(console, new_pos);
+		for (int i = 0; i < table_height; i++) {
+			printf(" 0x%-4X| ", ram_offset + i * table_width / 2);
+			for (int j = 0; j < table_width / 2; j++) {
+				word value = RAM[ram_offset + i * table_width / 2 + j];
+				if (((value & 0xff00) > 8) < 0x10) printf("0");
+				printf("%X ", (value & 0xff00) > 8);
+				if ((value & 0x00ff) < 0x10) printf("0");
+				printf("%X ", value & 0x00ff);
+			}
+			new_pos.Y++;
+			SetConsoleCursorPosition(console, new_pos);
+		}
+
+		for (int i = -3; i < table_width; i++) printf("---");
+
+		SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), init_pos);
+
 		printf("\n");
 	}
 }
@@ -115,7 +166,7 @@ int ist_fetch(const word address) { // Fetches the next instruction from memory
 		return 1;
 	}
 	inst = RAM[address];
-	system_log(0, "RAM", "IST fetch", 2, address, inst);
+	system_log(0, "CPU", "IST fetch", 2, address, inst);
 	REG[RPC] = address;
 	return 0;
 }
@@ -331,7 +382,7 @@ int ist_execute() { // Executes the current instruction
 			system_log(0, "REG", "CLR", 1, reg);
 		}
 			break;
-		case IN: {   // Scan for input and store the value in a register
+		case IN_: {   // Scan for input and store the value in a register
 			system_log(4, "CPU", "IN", 0);
 			char* end;
 			char buf[10];
@@ -348,7 +399,7 @@ int ist_execute() { // Executes the current instruction
 			fflush(stdin);
 		}
 			break;
-		case OUT: {	 // Output the value in a register
+		case OUT_: {	 // Output the value in a register
 			system_log(3, "CPU", "OUT", 0);
 			word reg = (inst >> 5) & 0b111;
 			word format = (inst >> 8) & 0b11;
@@ -375,13 +426,14 @@ int ist_execute() { // Executes the current instruction
 		case GETS: {
 			word dest = REG[(inst >> 5) & 0b111];
 			system_log(4, "CPU", "GETS", 1, dest);
-			char buffer[128];
+			char buffer[128] = { 0 };
 			scanf_s("%127s", buffer, (unsigned)_countof(buffer));
 			int i = 0;
 			do {
 				RAM[dest + i] = buffer[i];
-			} while (i < 32 && buffer[i++] != '\n');
+			} while (i < 128 && buffer[i] != '\0' && buffer[i++] != '\n');
 			RAM[dest + i] = '\0';
+			printf("%d\n", i);
 			char tmp = getchar();
 		}
 			break;
