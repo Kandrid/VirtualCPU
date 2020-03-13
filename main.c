@@ -443,6 +443,7 @@ int ist_execute() { // Executes the current instruction
 			word val = inst & 0xff;
 			REG[dest] = val;
 			system_log(0, "REG", "SET", 2, dest, val);
+			set_flags(val);
 		}
 			break;
 		case GETS: {
