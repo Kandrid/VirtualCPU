@@ -481,30 +481,21 @@ int ist_execute() { // Executes the current instruction
 	return ist_fetch(REG[RPC]); // Fetch the next instruction
 }
 
-void readFileBytes(const char* name)
+void readFileValues(const char* name)
 {
-	FILE* fileptr;
-	word* buffer;
-	long filelen;
-#pragma warning(suppress : 4996)
-	fileptr = fopen(name, "rb");  // Open the file in binary mode
-	fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
-	filelen = ftell(fileptr);             // Get the current byte offset in the file
-	rewind(fileptr);                      // Jump back to the beginning of the file
-	buffer = (word*)calloc(filelen, sizeof(word)); // Enough memory for the file
-	if (buffer != 0) {
-		fread(buffer, filelen, 1, fileptr); // Read in the entire file
-		for (int i = 0; i < MEM_SIZE && i < filelen; i++) {// Load the program memory into memory
-			RAM[i] = buffer[i];
+	FILE* file;
+	fopen_s(&file, name, "r");
+	if (file != 0) {
+		for (word i = 0, buffer; i < MEM_SIZE && fscanf_s(file, "%hu", &buffer) != EOF; i++) {
+			RAM[i] = buffer;
 		}
+		fclose(file);
 	}
-	fclose(fileptr); // Close the file
-	free(buffer);
 }
 
 int start() {                                           // Start the system
 	system_log(0, "CPU", "Starting", 0);
-	readFileBytes("data.inst");
+	readFileValues("data.int");
 	set_flags(0);
 	return ist_fetch(0);                                // Fetch the first instruction
 }
