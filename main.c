@@ -139,7 +139,7 @@ void mem_print() {
 	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), init_pos);
 }
 
-void system_log(const int level, const char* locale, const char* message, const int num,...) { // System logging
+void system_log(const int level, const _Bool sign_extend, const char* locale, const char* message, const int num,...) { // System logging
 	if (level >= LOG_LEVEL) {
 		va_list valist;
 		char* type;
@@ -164,7 +164,8 @@ void system_log(const int level, const char* locale, const char* message, const 
 		printf("[%s]|%s| %s ", type, locale, message);
 		va_start(valist, num);
 		for (int i = 0; i < num; i++) {
-			printf("%d ", va_arg(valist, __int16));
+			if (sign_extend) printf("%d ", va_arg(valist, __int16));
+			else printf("%hu ", va_arg(valist, word));
 		}
 		va_end(valist);
 
@@ -184,18 +185,18 @@ word sign_extend(word x, word bit_count) // Extension of 8 bit values to 16 bit 
 
 int ist_fetch(const word address) { // Fetches the next instruction from memory
 	if (address + 1 >= MEM_SIZE) {
-		system_log(1, "RAM", "Address out of reach", 1, address);
+		system_log(1, 0, "RAM", "Address out of reach", 1, address);
 		return 1;
 	}
 	inst = RAM[address];
-	system_log(0, "CPU", "IST fetch", 2, address, inst);
+	system_log(0, 0, "CPU", "IST fetch", 2, address, inst);
 	REG[RPC] = address;
 	return 0;
 }
 
 void set_flags(__int16 value) { // Updates the conditional flag register
 	REG[RCOND] = ((value < 0) << 2) | ((value == 0) << 1) | (value > 0);
-	system_log(0, "REG", "Set Flags", 3, (REG[RCOND] & 0b100) >> 2, (REG[RCOND] & 0b10) >> 1, REG[RCOND] & 0b1);
+	system_log(0, 1, "REG", "Set Flags", 3, (REG[RCOND] & 0b100) >> 2, (REG[RCOND] & 0b10) >> 1, REG[RCOND] & 0b1);
 }
 
 int ist_execute() { // Executes the current instruction
@@ -209,7 +210,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[(inst >> 5) & 0b111];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
 			REG[dest] = val1 + val2;
-			system_log(0, "ALU", "ADD", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "ADD", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -218,7 +219,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[(inst >> 5) & 0b111];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
 			REG[dest] = val1 - val2;
-			system_log(0, "ALU", "SUB", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "SUB", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -227,7 +228,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[(inst >> 5) & 0b111];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
 			REG[dest] = val1 * val2;
-			system_log(0, "ALU", "MUL", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "MUL", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -236,11 +237,11 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[(inst >> 5) & 0b111];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
 			if (val2 == 0) {
-				system_log(2, "ALU", "DIV ZERO ", 3, dest, val1, val2);
+				system_log(2, 1, "ALU", "DIV ZERO ", 3, dest, val1, val2);
 			}
 			else {
 				REG[dest] = val1 / val2;
-				system_log(0, "ALU", "DIV", 4, dest, val1, val2, REG[dest]);
+				system_log(0, 1, "ALU", "DIV", 4, dest, val1, val2, REG[dest]);
 				set_flags(REG[dest]);
 			}
 		}
@@ -250,7 +251,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[dest];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : 1;
 			REG[dest] = val1 + val2;
-			system_log(0, "ALU", "INC", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "INC", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -259,7 +260,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[dest];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : 1;
 			REG[dest] = val1 - val2;
-			system_log(0, "ALU", "DEC", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "DEC", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -267,7 +268,7 @@ int ist_execute() { // Executes the current instruction
 			word dest = (inst >> 8) & 0b111;
 			word val = REG[(inst >> 5) & 0b111];
 			REG[dest] = val >> 1;
-			system_log(0, "ALU", "SHR", 4, dest, val, REG[dest]);
+			system_log(0, 1, "ALU", "SHR", 4, dest, val, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -275,7 +276,7 @@ int ist_execute() { // Executes the current instruction
 			word dest = (inst >> 8) & 0b111;
 			word val = REG[(inst >> 5) & 0b111];
 			REG[dest] = val << 1;
-			system_log(0, "ALU", "SHL", 4, dest, val, REG[dest]);
+			system_log(0, 1, "ALU", "SHL", 4, dest, val, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -283,7 +284,7 @@ int ist_execute() { // Executes the current instruction
 			word dest = (inst >> 8) & 0b111;
 			word val = REG[(inst >> 5) & 0b111];
 			REG[dest] = ~val;
-			system_log(0, "ALU", "NOT", 4, dest, val, REG[dest]);
+			system_log(0, 1, "ALU", "NOT", 4, dest, val, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -292,7 +293,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[(inst >> 5) & 0b111];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
 			REG[dest] = val1 | val2;
-			system_log(0, "ALU", "OR", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "OR", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -301,7 +302,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[(inst >> 5) & 0b111];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
 			REG[dest] = val1 & val2;
-			system_log(0, "ALU", "AND", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "AND", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -310,7 +311,7 @@ int ist_execute() { // Executes the current instruction
 			word val1 = REG[(inst >> 5) & 0b111];
 			word val2 = (inst >> 4) & 0b1 ? sign_extend(inst & 0b1111, 4) : REG[inst & 0b111];
 			REG[dest] = val1 ^ val2;
-			system_log(0, "ALU", "XOR", 4, dest, val1, val2, REG[dest]);
+			system_log(0, 1, "ALU", "XOR", 4, dest, val1, val2, REG[dest]);
 			set_flags(REG[dest]);
 		}
 			break;
@@ -320,7 +321,7 @@ int ist_execute() { // Executes the current instruction
 			word offset = inst & 0b11111;
 			word val = RAM[base + offset];
 			REG[dest] = val;
-			system_log(0, "REG", "LDR", 2, dest, val);
+			system_log(0, 1, "REG", "LDR", 2, dest, val);
 			set_flags(val);
 		}
 			break;
@@ -329,7 +330,7 @@ int ist_execute() { // Executes the current instruction
 			word address = inst & 0xff;
 			word val = RAM[address];
 			REG[dest] = val;
-			system_log(0, "RAM", "LD", 3, dest, address, val);
+			system_log(0, 1, "RAM", "LD", 3, dest, address, val);
 			set_flags(val);
 		}
 			break;
@@ -338,7 +339,7 @@ int ist_execute() { // Executes the current instruction
 			word address = RAM[inst & 0xff, 8];
 			word val = RAM[address];
 			REG[dest] = val;
-			system_log(0, "RAM", "LDI", 3, dest, address, val);
+			system_log(0, 1, "RAM", "LDI", 3, dest, address, val);
 			set_flags(val);
 		}
 			break;
@@ -346,7 +347,7 @@ int ist_execute() { // Executes the current instruction
 			word val = REG[(inst >> 8) & 0b111];
 			word address = inst & 0xff;
 			RAM[address] = val;
-			system_log(0, "RAM", "ST", 2, address, val);
+			system_log(0, 1, "RAM", "ST", 2, address, val);
 			set_flags(val);
 		}
 			break;
@@ -354,7 +355,7 @@ int ist_execute() { // Executes the current instruction
 			word val = REG[(inst >> 8) & 0b111];
 			word address = RAM[inst & 0xff];
 			RAM[address] = val;
-			system_log(0, "RAM", "STI", 2, address, val);
+			system_log(0, 1, "RAM", "STI", 2, address, val);
 			set_flags(val);
 		}
 			break;
@@ -363,7 +364,7 @@ int ist_execute() { // Executes the current instruction
 			word base = (inst >> 5) & 0b111;
 			word offset = inst & 0b11111;
 			RAM[REG[base] + offset] = val;
-			system_log(0, "RAM", "STR", 2, REG[base] + offset, val);
+			system_log(0, 1, "RAM", "STR", 2, REG[base] + offset, val);
 			set_flags(val);
 		}
 			break;
@@ -373,7 +374,7 @@ int ist_execute() { // Executes the current instruction
 				word offset = sign_extend(inst & 0xff, 8);
 				word address = REG[RPC] + offset;
 				REG[RPC] = address;
-				system_log(0, "CPU", "BR", 1, offset);
+				system_log(0, 1, "CPU", "BR", 1, offset);
 			}
 		}
 			break;
@@ -381,31 +382,31 @@ int ist_execute() { // Executes the current instruction
 		case JMP: {	 // Uncondtionally jump to a different instruction in memory
 			word address = (inst >> 4) & 1 ? inst & 0b1111 : REG[(inst >> 5) & 0b111];
 			REG[RPC] = address;
-			system_log(0, "CPU", "JMP", 1, address);
+			system_log(0, 0, "CPU", "JMP", 1, address);
 		}
 			break;
 		case JSR: {  // Jump to subroutine address
 			word address = sign_extend(inst & 0x3ff, 10);
 			REG[R7] = REG[RPC];
 			REG[RPC] = address;
-			system_log(0, "CPU", "JSR", 1, address);
+			system_log(0, 0, "CPU", "JSR", 1, address);
 		}
 			break;
 		case JSRR: { // Jump to subroutine address stored in a register
 			word address = REG[(inst >> 5) & 0b111];
 			REG[R7] = REG[RPC];
 			REG[RPC] = address;
-			system_log(0, "CPU", "JSRR", 1, address);
+			system_log(0, 0, "CPU", "JSRR", 1, address);
 		}
 			break;
 		case CLR: {  // Clear a register
 			word reg = (inst >> 8) & 0b111;
 			REG[reg] = 0;
-			system_log(0, "REG", "CLR", 1, reg);
+			system_log(0, 1, "REG", "CLR", 1, reg);
 		}
 			break;
 		case IN_: {   // Scan for input and store the value in a register
-			system_log(4, "CPU", "IN", 0);
+			system_log(4, 1, "CPU", "IN", 0);
 			char* end;
 			char buf[10];
 			if (!fgets(buf, sizeof buf, stdin))
@@ -413,7 +414,7 @@ int ist_execute() { // Executes the current instruction
 			buf[strlen(buf) - 1] = 0;
 			int buffer = strtol(buf, &end, 10);
 			if (buffer > UINT16_MAX) {
-				system_log(1, "CPU", "Buffer Overflow", 0);
+				system_log(1, 1, "CPU", "Buffer Overflow", 0);
 			}
 			else {
 				REG[(inst >> 8) & 0b111] = (word)buffer;
@@ -422,7 +423,7 @@ int ist_execute() { // Executes the current instruction
 		}
 			break;
 		case OUT_: {	 // Output the value in a register
-			system_log(3, "CPU", "OUT", 0);
+			system_log(3, 1, "CPU", "OUT", 0);
 			word reg = (inst >> 5) & 0b111;
 			word format = (inst >> 8) & 0b11;
 			if (format == 1) {
@@ -442,13 +443,13 @@ int ist_execute() { // Executes the current instruction
 			word dest = (inst >> 8) & 0b111;
 			word val = inst & 0xff;
 			REG[dest] = val;
-			system_log(0, "REG", "SET", 2, dest, val);
+			system_log(0, 1, "REG", "SET", 2, dest, val);
 			set_flags(val);
 		}
 			break;
 		case GETS: {
 			word dest = REG[(inst >> 5) & 0b111];
-			system_log(4, "CPU", "GETS", 1, dest);
+			system_log(4, 0, "CPU", "GETS", 1, dest);
 			char buffer[128] = { 0 };
 			scanf_s("%127s", buffer, (unsigned)_countof(buffer));
 			int i = 0;
@@ -462,7 +463,7 @@ int ist_execute() { // Executes the current instruction
 			break;
 		case PUTS: {
 			word source = REG[(inst >> 5) & 0b111];
-			system_log(3, "CPU", "PUTS", 1, source);
+			system_log(3, 0, "CPU", "PUTS", 1, source);
 			while (1) {
 				char c = (char)RAM[source++];
 				if (c == '\0' || source == UINT16_MAX) { break; }
@@ -474,7 +475,7 @@ int ist_execute() { // Executes the current instruction
 		}
 			break;
 		default:     // Invalid opcode case
-			system_log(2, "CPU", "Invalid Opcode", 1, opcode);
+			system_log(2, 0, "CPU", "Invalid Opcode", 1, opcode);
 			return 1;
 			break;
 	}
@@ -495,7 +496,7 @@ void readFileValues(const char* name)
 }
 
 int start() {                                           // Start the system
-	system_log(0, "CPU", "Starting", 0);
+	system_log(0, 0, "CPU", "Starting", 0);
 	readFileValues("data.int");
 	set_flags(0);
 	return ist_fetch(0);                                // Fetch the first instruction
