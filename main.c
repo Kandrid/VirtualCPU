@@ -60,6 +60,7 @@ enum OPCODE {// Instruction Format                   Opcode function
 
 long CYCLE = 0;             // Time in milliseconds between instruction execution or each clock cycle
 byte LOG_LEVEL = 0;         // Level of notice for system activity; 0 = all, 1 = warnings only, 2 = errors only, 3 = output only, 4 = input only
+word MEM_VIEW = 0;          // Start of memory preview
 
 word RAM[MEM_SIZE] = { 0 }; // Memory
 word REG[RCOUNT];           // Registers
@@ -98,7 +99,6 @@ void mem_print() {
 
 	int table_width = 20;
 	int table_height = 25;
-	int ram_offset = 100;
 
 	for (int i = -3; i < table_width; i++) printf("---");
 
@@ -109,8 +109,8 @@ void mem_print() {
 
 	for (int i = 0; i < RCOUNT; i++) {
 		word value = REG[i];
-		if (((value & 0xff00) > 8) < 0x10) printf("0");
-		printf("%X ", (value & 0xff00) > 8);
+		if (((value & 0xff00) >> 8) < 0x10) printf("0");
+		printf("%X ", (value & 0xff00) >> 8);
 		if ((value & 0x00ff) < 0x10) printf("0");
 		printf("%X ", value & 0x00ff);
 	}
@@ -122,13 +122,13 @@ void mem_print() {
 	new_pos.Y++;
 	SetConsoleCursorPosition(console, new_pos);
 	for (int i = 0; i < table_height; i++) {
-		printf(" 0x%-4X| ", ram_offset + i * table_width / 2);
+		printf(" 0x%-4X| ", MEM_VIEW + i * table_width / 2);
 		for (int j = 0; j < table_width / 2; j++) {
-			word value = RAM[ram_offset + i * table_width / 2 + j];
-			if (((value & 0xff00) > 8) < 0x10) printf("0");
-			printf("%X ", (value & 0xff00) > 8);
+			word value = RAM[MEM_VIEW + i * table_width / 2 + j];
 			if ((value & 0x00ff) < 0x10) printf("0");
 			printf("%X ", value & 0x00ff);
+			if ((value >> 8) < 0x10) printf("0");
+			printf("%X ", (value & 0xff00) >> 8);
 		}
 		new_pos.Y++;
 		SetConsoleCursorPosition(console, new_pos);
@@ -354,7 +354,7 @@ int ist_execute() { // Executes the current instruction
 			word val = REG[(inst >> 8) & 0b111];
 			word address = RAM[inst & 0xff];
 			RAM[address] = val;
-			system_log(0, "RAM", "ST", 2, address, val);
+			system_log(0, "RAM", "STI", 2, address, val);
 			set_flags(val);
 		}
 			break;
@@ -362,8 +362,8 @@ int ist_execute() { // Executes the current instruction
 			word val = REG[(inst >> 8) & 0b111];
 			word base = (inst >> 5) & 0b111;
 			word offset = inst & 0b11111;
-			RAM[base + offset] = val;
-			system_log(0, "RAM", "ST", 2, base + offset, val);
+			RAM[REG[base] + offset] = val;
+			system_log(0, "RAM", "STR", 2, REG[base] + offset, val);
 			set_flags(val);
 		}
 			break;
@@ -481,47 +481,42 @@ int ist_execute() { // Executes the current instruction
 	return ist_fetch(REG[RPC]); // Fetch the next instruction
 }
 
-char* readFileBytes(const char* name, long* size)
+void readFileBytes(const char* name)
 {
-	#pragma warning(suppress : 4996)
-	FILE* fl = fopen(name, "r");
-	char* ret = NULL;
-	if (fl != 0) {
-		fseek(fl, 0, SEEK_END);
-		long len = ftell(fl);
-		*size = len;
-		ret = malloc(len);
-		fseek(fl, 0, SEEK_SET);
-		if (ret != 0) {
-			fread(ret, 1, len, fl);
+	FILE* fileptr;
+	word* buffer;
+	long filelen;
+#pragma warning(suppress : 4996)
+	fileptr = fopen(name, "rb");  // Open the file in binary mode
+	fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
+	filelen = ftell(fileptr);             // Get the current byte offset in the file
+	rewind(fileptr);                      // Jump back to the beginning of the file
+	buffer = (word*)calloc(filelen, sizeof(word)); // Enough memory for the file
+	if (buffer != 0) {
+		fread(buffer, filelen, 1, fileptr); // Read in the entire file
+		for (int i = 0; i < MEM_SIZE && i < filelen; i++) {// Load the program memory into memory
+			RAM[i] = buffer[i];
 		}
-		fclose(fl);
 	}
-	else {
-		*size = 0;
-	}
-	return ret;
+	fclose(fileptr); // Close the file
+	free(buffer);
 }
 
 int start() {                                           // Start the system
 	system_log(0, "CPU", "Starting", 0);
-	long size;
-	char* buffer = readFileBytes("data.inst", &size);
-	for (int i = 0; i < MEM_SIZE && i < size / 2 + 1; i++) {// Load the program memory into memory
-		RAM[i] = *((uint16_t*)&buffer[i * 2]);
-	}
-	free(buffer);
+	readFileBytes("data.inst");
 	set_flags(0);
 	return ist_fetch(0);                                // Fetch the first instruction
 }
 
 int main(int argc, char* argv[]) {
-	if (argc != 3) {
-		printf("Clock Cycle and Log level required\n");
+	if (argc > 4) {
+		printf("Too many arguments\n");
 	}
 	else {
-		CYCLE = atoi(argv[1]);
-		LOG_LEVEL = atoi(argv[2]);
+		if (argc >= 2) CYCLE = atoi(argv[1]);
+		if (argc >= 3) LOG_LEVEL = atoi(argv[2]);
+		if (argc == 4) MEM_VIEW = atoi(argv[3]);
 		if (!start()) {
 			while (!state) {                                // Clock cycle
 				if (clock() - clock_time >= CYCLE) {
